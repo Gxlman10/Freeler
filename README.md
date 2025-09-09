@@ -80,4 +80,3 @@ bash
 Copiar código
 git checkout dev
 Seguir las instrucciones de Backend y Frontend para instalar dependencias.
-
