@@ -1,10 +1,69 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import appConfig from './shared/infrastructure/config/app.config';
+import dbConfig from './shared/infrastructure/config/database.config';
+import jwtConfig from './shared/infrastructure/config/jwt.config';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+// Features
+import { AuthModule } from './auth/auth.module';
+import { RolesModule } from './roles/roles.module';
+import { UsuariosFreelerModule } from './usuarios-freeler/usuarios-freeler.module';
+import { EmpresasModule } from './empresas/empresas.module';
+import { UsuariosEmpresaModule } from './usuarios-empresa/usuarios-empresa.module';
+import { LeadsModule } from './leads/leads.module';
+import { ComisionesModule } from './comisiones/comisiones.module';
+import { AsignacionesModule } from './asignaciones/asignaciones.module';
+import { CampanasModule } from './campanas/campanas.module'; 
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [appConfig, dbConfig, jwtConfig],
+      envFilePath: ['.env'],
+    }),
+
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const db = config.get('database') as any;
+        const isDev = config.get<string>('app.nodeEnv') !== 'production';
+        return {
+          type: 'postgres',
+          host: db.host,
+          port: db.port,
+          database: db.name,
+          username: db.user,
+          password: db.pass,
+          entities: [__dirname + '/**/*.entity.{ts,js}'],
+          autoLoadEntities: true,
+          synchronize: false,
+          schema: 'freeler',
+          logging: ['error','query'],
+          ssl: {
+            rejectUnauthorized: false, // útil para RDS en dev
+          },
+          extra: {
+            // mantiene conexiones activas más tiempo (RDS)
+            connectionTimeoutMillis: 10000,
+            idleTimeoutMillis: 30000,
+            max: 10,
+          },
+        };
+      },
+    }),
+
+    // Features
+    AuthModule,
+    RolesModule,
+    UsuariosFreelerModule,
+    EmpresasModule,
+    UsuariosEmpresaModule,
+    LeadsModule,
+    ComisionesModule,
+    AsignacionesModule,
+    CampanasModule,
+  ],
 })
 export class AppModule {}
