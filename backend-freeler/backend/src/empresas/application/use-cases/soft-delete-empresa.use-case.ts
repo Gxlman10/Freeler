@@ -1,17 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { UpdateEmpresaDto } from '../../infrastructure/dto/update-empresa.dto';
 import { EMPRESA_REPOSITORY, IEmpresaRepository } from '../interfaces/empresa.repository.interface';
 
 @Injectable()
-export class UpdateEmpresaUseCase {
+export class SoftDeleteEmpresaUseCase {
   constructor(
     @Inject(EMPRESA_REPOSITORY)
     private readonly repo: IEmpresaRepository,
   ) {}
 
-  execute(id: number, dto: UpdateEmpresaDto) {
-    return this.repo.update(id, dto);
+  async execute(id: number) {
+    await this.repo.softDelete(id);
+    return { ok: true };
   }
 }
 
-export default UpdateEmpresaUseCase;
+export default SoftDeleteEmpresaUseCase;
