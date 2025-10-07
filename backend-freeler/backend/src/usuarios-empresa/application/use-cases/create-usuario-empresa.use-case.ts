@@ -1,7 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { CreateUsuarioEmpresaDto } from '../../infrastructure/dto/create-usuario-empresa.dto';
-import { IUsuarioEmpresaRepository, USUARIO_EMPRESA_REPOSITORY } from '../interfaces/usuario-empresa.repository.interface';
+import {
+  IUsuarioEmpresaRepository,
+  USUARIO_EMPRESA_REPOSITORY,
+} from '../interfaces/usuario-empresa.repository.interface';
 
 @Injectable()
 export class CreateUsuarioEmpresaUseCase {
@@ -21,7 +24,8 @@ export class CreateUsuarioEmpresaUseCase {
       password: hash,
       estado: dto.estado ?? 1,
     });
-    const { password, ...safe } = created as any;
+    const { password: _password, ...safe } = created;
+    void _password;
     return safe;
   }
 }

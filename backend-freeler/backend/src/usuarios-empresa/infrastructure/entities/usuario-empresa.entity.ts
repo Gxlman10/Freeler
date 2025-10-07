@@ -1,4 +1,11 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { EmpresaEntity } from '../../../empresas/infrastructure/entities/empresa.entity';
 import { RolEntity } from '../../../roles/infrastructure/entities/rol.entity';
 
@@ -28,7 +35,11 @@ export class UsuarioEmpresaEntity {
   @Column({ type: 'int', name: 'estado', default: 1 })
   estado!: number;
 
-  @CreateDateColumn({ type: 'timestamp', name: 'fecha_creacion', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn({
+    type: 'timestamp',
+    name: 'fecha_creacion',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   fecha_creacion!: Date;
 
   @ManyToOne(() => EmpresaEntity, { nullable: true })

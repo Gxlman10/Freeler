@@ -13,15 +13,21 @@ import { EmpresaEntity } from '../empresas/infrastructure/entities/empresa.entit
 import { RolEntity } from '../roles/infrastructure/entities/rol.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UsuarioEmpresaEntity, EmpresaEntity, RolEntity])],
+  imports: [
+    TypeOrmModule.forFeature([UsuarioEmpresaEntity, EmpresaEntity, RolEntity]),
+  ],
   controllers: [UsuariosEmpresaController],
   providers: [
-    { provide: USUARIO_EMPRESA_REPOSITORY, useClass: TypeormUsuarioEmpresaRepository },
+    {
+      provide: USUARIO_EMPRESA_REPOSITORY,
+      useClass: TypeormUsuarioEmpresaRepository,
+    },
     CreateUsuarioEmpresaUseCase,
     FindUsuarioEmpresaUseCase,
     ListUsuariosEmpresaUseCase,
     UpdateUsuarioEmpresaUseCase,
     SoftDeleteUsuarioEmpresaUseCase,
   ],
+  exports: [USUARIO_EMPRESA_REPOSITORY],
 })
 export class UsuariosEmpresaModule {}

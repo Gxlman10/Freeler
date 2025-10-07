@@ -1,17 +1,21 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import { PaginationDto } from '../../../shared/application/dto/pagination.dto';
 import { IUsuarioEmpresaRepository } from '../../application/interfaces/usuario-empresa.repository.interface';
 import { UsuarioEmpresaEntity } from '../entities/usuario-empresa.entity';
 
-export class TypeormUsuarioEmpresaRepository implements IUsuarioEmpresaRepository {
+export class TypeormUsuarioEmpresaRepository
+  implements IUsuarioEmpresaRepository
+{
   constructor(
     @InjectRepository(UsuarioEmpresaEntity)
     private readonly repo: Repository<UsuarioEmpresaEntity>,
   ) {}
 
-  async create(data: Partial<UsuarioEmpresaEntity>): Promise<UsuarioEmpresaEntity> {
+  async create(
+    data: Partial<UsuarioEmpresaEntity>,
+  ): Promise<UsuarioEmpresaEntity> {
     if (data.email) {
       const exists = await this.findByEmail(data.email);
       if (exists) throw new ConflictException('EMAIL_ALREADY_EXISTS');
@@ -21,17 +25,26 @@ export class TypeormUsuarioEmpresaRepository implements IUsuarioEmpresaRepositor
   }
 
   findById(id: number) {
+    const where: FindOptionsWhere<UsuarioEmpresaEntity> = {
+      id_usuario_empresa: id,
+    };
     return this.repo.findOne({
-      where: { id_usuario_empresa: id } as any,
+      where,
       relations: { empresa: true, rol: true },
     });
   }
 
   findByEmail(email: string) {
-    return this.repo.findOne({ where: { email }, relations: { empresa: true, rol: true } });
+    return this.repo.findOne({
+      where: { email },
+      relations: { empresa: true, rol: true },
+    });
   }
 
-  async update(id: number, data: Partial<UsuarioEmpresaEntity>): Promise<UsuarioEmpresaEntity> {
+  async update(
+    id: number,
+    data: Partial<UsuarioEmpresaEntity>,
+  ): Promise<UsuarioEmpresaEntity> {
     const current = await this.findById(id);
     if (!current) throw new NotFoundException('NOT_FOUND');
 
@@ -40,12 +53,18 @@ export class TypeormUsuarioEmpresaRepository implements IUsuarioEmpresaRepositor
       if (exists) throw new ConflictException('EMAIL_ALREADY_EXISTS');
     }
 
-    await this.repo.update({ id_usuario_empresa: id } as any, data);
-    return (await this.findById(id))!;
+    const where: FindOptionsWhere<UsuarioEmpresaEntity> = {
+      id_usuario_empresa: id,
+    };
+    await this.repo.update(where, data);
+    const updated = await this.findById(id);
+    if (!updated) throw new NotFoundException('NOT_FOUND');
+    return updated;
   }
 
   async paginate({ page = 1, limit = 10, search }: PaginationDto) {
-    const qb = this.repo.createQueryBuilder('u')
+    const qb = this.repo
+      .createQueryBuilder('u')
       .leftJoinAndSelect('u.empresa', 'empresa')
       .leftJoinAndSelect('u.rol', 'rol');
 
@@ -68,7 +87,10 @@ export class TypeormUsuarioEmpresaRepository implements IUsuarioEmpresaRepositor
   async softDelete(id: number): Promise<void> {
     const existing = await this.findById(id);
     if (!existing) throw new NotFoundException('NOT_FOUND');
-    await this.repo.update({ id_usuario_empresa: id } as any, { estado: 0 });
+    const where: FindOptionsWhere<UsuarioEmpresaEntity> = {
+      id_usuario_empresa: id,
+    };
+    await this.repo.update(where, { estado: 0 });
   }
 }
 

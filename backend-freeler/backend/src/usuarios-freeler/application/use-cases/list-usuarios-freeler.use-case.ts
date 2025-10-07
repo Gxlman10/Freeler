@@ -1,5 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { IUsuarioFreelerRepository, USUARIO_FREELER_REPOSITORY } from '../interfaces/usuario-freeler.repository.interface';
+import {
+  IUsuarioFreelerRepository,
+  USUARIO_FREELER_REPOSITORY,
+} from '../interfaces/usuario-freeler.repository.interface';
 import { PaginationDto } from '../../../shared/application/dto/pagination.dto';
 
 @Injectable()

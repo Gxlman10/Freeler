@@ -1,7 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { UpdateUsuarioEmpresaDto } from '../../infrastructure/dto/update-usuario-empresa.dto';
-import { IUsuarioEmpresaRepository, USUARIO_EMPRESA_REPOSITORY } from '../interfaces/usuario-empresa.repository.interface';
+import {
+  IUsuarioEmpresaRepository,
+  USUARIO_EMPRESA_REPOSITORY,
+} from '../interfaces/usuario-empresa.repository.interface';
 
 @Injectable()
 export class UpdateUsuarioEmpresaUseCase {
@@ -17,7 +20,8 @@ export class UpdateUsuarioEmpresaUseCase {
       payload = { ...payload, password: hash };
     }
     const updated = await this.repo.update(id, payload);
-    const { password, ...safe } = updated as any;
+    const { password: _password, ...safe } = updated;
+    void _password;
     return safe;
   }
 }

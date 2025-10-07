@@ -14,7 +14,7 @@ import { UsuariosEmpresaModule } from './usuarios-empresa/usuarios-empresa.modul
 import { LeadsModule } from './leads/leads.module';
 import { ComisionesModule } from './comisiones/comisiones.module';
 import { AsignacionesModule } from './asignaciones/asignaciones.module';
-import { CampanasModule } from './campanas/campanas.module'; 
+import { CampanasModule } from './campanas/campanas.module';
 
 @Module({
   imports: [
@@ -27,8 +27,18 @@ import { CampanasModule } from './campanas/campanas.module';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const db = config.get('database') as any;
-        const isDev = config.get<string>('app.nodeEnv') !== 'production';
+        const db = config.get<{
+          host: string;
+          port: number;
+          name: string;
+          user: string;
+          pass: string;
+        }>('database');
+
+        if (!db) {
+          throw new Error('Database configuration is not defined');
+        }
+
         return {
           type: 'postgres',
           host: db.host,
@@ -40,7 +50,7 @@ import { CampanasModule } from './campanas/campanas.module';
           autoLoadEntities: true,
           synchronize: false,
           schema: 'freeler',
-          logging: ['error','query'],
+          logging: ['error', 'query'],
           ssl: {
             rejectUnauthorized: false, // útil para RDS en dev
           },

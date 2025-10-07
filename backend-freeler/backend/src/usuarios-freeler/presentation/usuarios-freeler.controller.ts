@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreateUsuarioFreelerDto } from '../infrastructure/dto/create-usuario-freeler.dto';
 import { UpdateUsuarioFreelerDto } from '../infrastructure/dto/update-usuario-freeler.dto';
@@ -10,6 +19,19 @@ import { ListUsuariosFreelerUseCase } from '../application/use-cases/list-usuari
 import { SoftDeleteUsuarioFreelerUseCase } from '../application/use-cases/soft-delete-usuario-freeler.use-case';
 import { GetUsuarioStatsUseCase } from '../application/use-cases/get-usuario-stats.use-case';
 import { DataSource } from 'typeorm';
+
+type DbCheckResponse = {
+  db: string | null;
+  usr: string | null;
+  schemas: unknown;
+  regclass: string | null;
+};
+
+const isUnknownArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
 
 @ApiTags('usuarios-freeler')
 @Controller('usuarios-freeler')
@@ -24,20 +46,34 @@ export class UsuariosFreelerController {
     private readonly ds: DataSource,
   ) {}
 
-
-    @Get('db-check')
-    async dbCheck() {
-    const rows = await this.ds.query(`
+  @Get('db-check')
+  async dbCheck() {
+    const rows: unknown = await this.ds.query(`
         SELECT
         current_database()  AS db,
         current_user        AS usr,
         current_schemas(true) AS schemas,
         to_regclass('freeler.usuario_freeler') AS regclass
     `);
-    return rows[0];
+
+    if (!isUnknownArray(rows)) {
+      return null;
     }
 
+    const [row] = rows;
+    if (!isRecord(row)) {
+      return null;
+    }
 
+    const response: DbCheckResponse = {
+      db: typeof row.db === 'string' ? row.db : null,
+      usr: typeof row.usr === 'string' ? row.usr : null,
+      schemas: row.schemas ?? null,
+      regclass: typeof row.regclass === 'string' ? row.regclass : null,
+    };
+
+    return response;
+  }
 
   @ApiOperation({ summary: 'Registrar usuario freeler (sin JWT)' })
   @ApiOkResponse({ description: 'Usuario registrado' })
@@ -55,7 +91,7 @@ export class UsuariosFreelerController {
   @ApiOperation({ summary: 'Actualizar usuario' })
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateUsuarioFreelerDto) {
-    return this.updateUC.execute(Number(id), dto as any);
+    return this.updateUC.execute(Number(id), dto);
   }
 
   @ApiOperation({ summary: 'Listar usuarios' })

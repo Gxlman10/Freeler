@@ -32,4 +32,11 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`🚀 API http://localhost:${port}${swaggerPath}`);
 }
-bootstrap();
+void (async () => {
+  try {
+    await bootstrap();
+  } catch (error) {
+    console.error('Error starting application', error);
+    process.exit(1);
+  }
+})();

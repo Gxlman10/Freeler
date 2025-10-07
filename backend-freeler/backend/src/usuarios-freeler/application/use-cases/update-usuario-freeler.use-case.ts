@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { UpdateUsuarioFreelerDto } from '../../infrastructure/dto/update-usuario-freeler.dto';
-import { IUsuarioFreelerRepository, USUARIO_FREELER_REPOSITORY } from '../interfaces/usuario-freeler.repository.interface';
+import {
+  IUsuarioFreelerRepository,
+  USUARIO_FREELER_REPOSITORY,
+} from '../interfaces/usuario-freeler.repository.interface';
 
 @Injectable()
 export class UpdateUsuarioFreelerUseCase {
@@ -11,7 +14,8 @@ export class UpdateUsuarioFreelerUseCase {
 
   async execute(id: number, dto: UpdateUsuarioFreelerDto) {
     const updated = await this.repo.update(id, dto);
-    const { password, ...safe } = updated as any;
+    const { password: _password, ...safe } = updated;
+    void _password;
     return safe;
   }
 }

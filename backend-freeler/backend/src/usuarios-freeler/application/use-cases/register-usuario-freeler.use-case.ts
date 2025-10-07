@@ -1,7 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { CreateUsuarioFreelerDto } from '../../infrastructure/dto/create-usuario-freeler.dto';
-import { IUsuarioFreelerRepository, USUARIO_FREELER_REPOSITORY } from '../interfaces/usuario-freeler.repository.interface';
+import {
+  IUsuarioFreelerRepository,
+  USUARIO_FREELER_REPOSITORY,
+} from '../interfaces/usuario-freeler.repository.interface';
 
 @Injectable()
 export class RegisterUsuarioFreelerUseCase {
@@ -22,7 +25,8 @@ export class RegisterUsuarioFreelerUseCase {
       estado: 1,
       saldo: '0.00',
     });
-    const { password, ...safe } = created as any;
+    const { password: _password, ...safe } = created;
+    void _password;
     return safe;
   }
 }

@@ -7,8 +7,13 @@ export interface IUsuarioEmpresaRepository {
   create(data: Partial<UsuarioEmpresaEntity>): Promise<UsuarioEmpresaEntity>;
   findById(id: number): Promise<UsuarioEmpresaEntity | null>;
   findByEmail(email: string): Promise<UsuarioEmpresaEntity | null>;
-  update(id: number, data: Partial<UsuarioEmpresaEntity>): Promise<UsuarioEmpresaEntity>;
-  paginate(pagination: PaginationDto): Promise<{ data: UsuarioEmpresaEntity[]; total: number }>;
+  update(
+    id: number,
+    data: Partial<UsuarioEmpresaEntity>,
+  ): Promise<UsuarioEmpresaEntity>;
+  paginate(
+    pagination: PaginationDto,
+  ): Promise<{ data: UsuarioEmpresaEntity[]; total: number }>;
   softDelete(id: number): Promise<void>;
 }
 

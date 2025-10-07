@@ -16,7 +16,10 @@ import { SoftDeleteUsuarioFreelerUseCase } from './application/use-cases/soft-de
   imports: [TypeOrmModule.forFeature([UsuarioFreelerEntity])],
   controllers: [UsuariosFreelerController],
   providers: [
-    { provide: USUARIO_FREELER_REPOSITORY, useClass: TypeormUsuarioFreelerRepository },
+    {
+      provide: USUARIO_FREELER_REPOSITORY,
+      useClass: TypeormUsuarioFreelerRepository,
+    },
     RegisterUsuarioFreelerUseCase,
     FindUsuarioFreelerUseCase,
     UpdateUsuarioFreelerUseCase,

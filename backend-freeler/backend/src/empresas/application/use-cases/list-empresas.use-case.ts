@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PaginationDto } from '../../../shared/application/dto/pagination.dto';
-import { EMPRESA_REPOSITORY, IEmpresaRepository } from '../interfaces/empresa.repository.interface';
+import {
+  EMPRESA_REPOSITORY,
+  IEmpresaRepository,
+} from '../interfaces/empresa.repository.interface';
 
 @Injectable()
 export class ListEmpresasUseCase {

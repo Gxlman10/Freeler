@@ -8,8 +8,13 @@ export interface IUsuarioFreelerRepository {
   findById(id: number): Promise<UsuarioFreelerEntity | null>;
   findByEmail(email: string): Promise<UsuarioFreelerEntity | null>;
   findByDni(dni: string): Promise<UsuarioFreelerEntity | null>;
-  update(id: number, data: Partial<UsuarioFreelerEntity>): Promise<UsuarioFreelerEntity>;
-  paginate(pagination: PaginationDto): Promise<{ data: UsuarioFreelerEntity[]; total: number }>;
+  update(
+    id: number,
+    data: Partial<UsuarioFreelerEntity>,
+  ): Promise<UsuarioFreelerEntity>;
+  paginate(
+    pagination: PaginationDto,
+  ): Promise<{ data: UsuarioFreelerEntity[]; total: number }>;
   softDelete(id: number): Promise<void>;
 }
 

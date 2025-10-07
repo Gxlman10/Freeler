@@ -1,17 +1,21 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import { IUsuarioFreelerRepository } from '../../application/interfaces/usuario-freeler.repository.interface';
 import { UsuarioFreelerEntity } from '../entities/usuario-freeler.entity';
 import { PaginationDto } from '../../../shared/application/dto/pagination.dto';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 
-export class TypeormUsuarioFreelerRepository implements IUsuarioFreelerRepository {
+export class TypeormUsuarioFreelerRepository
+  implements IUsuarioFreelerRepository
+{
   constructor(
     @InjectRepository(UsuarioFreelerEntity)
     private readonly repo: Repository<UsuarioFreelerEntity>,
   ) {}
 
-  async create(data: Partial<UsuarioFreelerEntity>): Promise<UsuarioFreelerEntity> {
+  async create(
+    data: Partial<UsuarioFreelerEntity>,
+  ): Promise<UsuarioFreelerEntity> {
     if (data.email) {
       const exists = await this.findByEmail(data.email);
       if (exists) throw new ConflictException('EMAIL_ALREADY_EXISTS');
@@ -25,7 +29,10 @@ export class TypeormUsuarioFreelerRepository implements IUsuarioFreelerRepositor
   }
 
   findById(id: number) {
-    return this.repo.findOne({ where: { id_usuario_freeler: id } as any });
+    const where: FindOptionsWhere<UsuarioFreelerEntity> = {
+      id_usuario_freeler: id,
+    };
+    return this.repo.findOne({ where });
   }
 
   findByEmail(email: string) {
@@ -36,7 +43,10 @@ export class TypeormUsuarioFreelerRepository implements IUsuarioFreelerRepositor
     return this.repo.findOne({ where: { dni } });
   }
 
-  async update(id: number, data: Partial<UsuarioFreelerEntity>): Promise<UsuarioFreelerEntity> {
+  async update(
+    id: number,
+    data: Partial<UsuarioFreelerEntity>,
+  ): Promise<UsuarioFreelerEntity> {
     const current = await this.findById(id);
     if (!current) throw new NotFoundException('NOT_FOUND');
 
@@ -49,8 +59,13 @@ export class TypeormUsuarioFreelerRepository implements IUsuarioFreelerRepositor
       if (exists) throw new ConflictException('DNI_ALREADY_EXISTS');
     }
 
-    await this.repo.update({ id_usuario_freeler: id } as any, data);
-    return (await this.findById(id))!;
+    const where: FindOptionsWhere<UsuarioFreelerEntity> = {
+      id_usuario_freeler: id,
+    };
+    await this.repo.update(where, data);
+    const updated = await this.findById(id);
+    if (!updated) throw new NotFoundException('NOT_FOUND');
+    return updated;
   }
 
   async paginate({ page = 1, limit = 10, search }: PaginationDto) {
@@ -70,7 +85,10 @@ export class TypeormUsuarioFreelerRepository implements IUsuarioFreelerRepositor
   }
 
   async softDelete(id: number): Promise<void> {
-    await this.repo.update({ id_usuario_freeler: id } as any, { estado: 0 });
+    const where: FindOptionsWhere<UsuarioFreelerEntity> = {
+      id_usuario_freeler: id,
+    };
+    await this.repo.update(where, { estado: 0 });
   }
 }
 

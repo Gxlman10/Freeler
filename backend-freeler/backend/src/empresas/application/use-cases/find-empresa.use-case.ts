@@ -1,5 +1,8 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { EMPRESA_REPOSITORY, IEmpresaRepository } from '../interfaces/empresa.repository.interface';
+import {
+  EMPRESA_REPOSITORY,
+  IEmpresaRepository,
+} from '../interfaces/empresa.repository.interface';
 
 @Injectable()
 export class FindEmpresaUseCase {

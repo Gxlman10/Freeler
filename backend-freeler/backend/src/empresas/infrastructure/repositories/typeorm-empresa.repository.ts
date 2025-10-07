@@ -1,6 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import { PaginationDto } from '../../../shared/application/dto/pagination.dto';
 import { IEmpresaRepository } from '../../application/interfaces/empresa.repository.interface';
 import { EmpresaEntity } from '../entities/empresa.entity';
@@ -25,7 +25,8 @@ export class TypeormEmpresaRepository implements IEmpresaRepository {
   }
 
   findById(id: number) {
-    return this.repo.findOne({ where: { id_empresa: id } as any });
+    const where: FindOptionsWhere<EmpresaEntity> = { id_empresa: id };
+    return this.repo.findOne({ where });
   }
 
   findByRuc(ruc: string) {
@@ -36,7 +37,10 @@ export class TypeormEmpresaRepository implements IEmpresaRepository {
     return this.repo.findOne({ where: { email } });
   }
 
-  async update(id: number, data: Partial<EmpresaEntity>): Promise<EmpresaEntity> {
+  async update(
+    id: number,
+    data: Partial<EmpresaEntity>,
+  ): Promise<EmpresaEntity> {
     const current = await this.findById(id);
     if (!current) throw new NotFoundException('NOT_FOUND');
 
@@ -49,8 +53,11 @@ export class TypeormEmpresaRepository implements IEmpresaRepository {
       if (exists) throw new ConflictException('EMAIL_ALREADY_EXISTS');
     }
 
-    await this.repo.update({ id_empresa: id } as any, data);
-    return (await this.findById(id))!;
+    const where: FindOptionsWhere<EmpresaEntity> = { id_empresa: id };
+    await this.repo.update(where, data);
+    const updated = await this.findById(id);
+    if (!updated) throw new NotFoundException('NOT_FOUND');
+    return updated;
   }
 
   async paginate({ page = 1, limit = 10, search }: PaginationDto) {
@@ -73,7 +80,8 @@ export class TypeormEmpresaRepository implements IEmpresaRepository {
   async softDelete(id: number): Promise<void> {
     const existing = await this.findById(id);
     if (!existing) throw new NotFoundException('NOT_FOUND');
-    await this.repo.update({ id_empresa: id } as any, { estado: 0 });
+    const where: FindOptionsWhere<EmpresaEntity> = { id_empresa: id };
+    await this.repo.update(where, { estado: 0 });
   }
 }
 

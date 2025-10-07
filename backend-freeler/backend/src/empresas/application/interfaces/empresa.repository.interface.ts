@@ -9,7 +9,9 @@ export interface IEmpresaRepository {
   findByRuc(ruc: string): Promise<EmpresaEntity | null>;
   findByEmail(email: string): Promise<EmpresaEntity | null>;
   update(id: number, data: Partial<EmpresaEntity>): Promise<EmpresaEntity>;
-  paginate(pagination: PaginationDto): Promise<{ data: EmpresaEntity[]; total: number }>;
+  paginate(
+    pagination: PaginationDto,
+  ): Promise<{ data: EmpresaEntity[]; total: number }>;
   softDelete(id: number): Promise<void>;
 }
 

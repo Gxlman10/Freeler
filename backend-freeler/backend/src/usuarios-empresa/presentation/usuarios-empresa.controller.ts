@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PaginationDto } from '../../shared/application/dto/pagination.dto';
 import { CreateUsuarioEmpresaUseCase } from '../application/use-cases/create-usuario-empresa.use-case';

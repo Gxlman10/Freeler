@@ -1,5 +1,8 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { IUsuarioFreelerRepository, USUARIO_FREELER_REPOSITORY } from '../interfaces/usuario-freeler.repository.interface';
+import {
+  IUsuarioFreelerRepository,
+  USUARIO_FREELER_REPOSITORY,
+} from '../interfaces/usuario-freeler.repository.interface';
 
 @Injectable()
 export class FindUsuarioFreelerUseCase {
@@ -11,7 +14,8 @@ export class FindUsuarioFreelerUseCase {
   async byId(id: string | number) {
     const user = await this.repo.findById(Number(id));
     if (!user) throw new NotFoundException('Usuario Freeler no encontrado');
-    const { password, ...safe } = user as any;
+    const { password: _password, ...safe } = user;
+    void _password;
     return safe;
   }
 }

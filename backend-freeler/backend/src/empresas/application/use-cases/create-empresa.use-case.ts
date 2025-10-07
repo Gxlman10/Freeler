@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { CreateEmpresaDto } from '../../infrastructure/dto/create-empresa.dto';
-import { EMPRESA_REPOSITORY, IEmpresaRepository } from '../interfaces/empresa.repository.interface';
+import {
+  EMPRESA_REPOSITORY,
+  IEmpresaRepository,
+} from '../interfaces/empresa.repository.interface';
 
 @Injectable()
 export class CreateEmpresaUseCase {

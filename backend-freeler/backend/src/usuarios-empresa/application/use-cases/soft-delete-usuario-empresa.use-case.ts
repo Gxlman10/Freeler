@@ -1,5 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { IUsuarioEmpresaRepository, USUARIO_EMPRESA_REPOSITORY } from '../interfaces/usuario-empresa.repository.interface';
+import {
+  IUsuarioEmpresaRepository,
+  USUARIO_EMPRESA_REPOSITORY,
+} from '../interfaces/usuario-empresa.repository.interface';
 
 @Injectable()
 export class SoftDeleteUsuarioEmpresaUseCase {

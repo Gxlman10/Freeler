@@ -1,4 +1,9 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity({ schema: 'freeler', name: 'empresas' })
 export class EmpresaEntity {
@@ -20,13 +25,22 @@ export class EmpresaEntity {
   @Column({ type: 'varchar', length: 255, name: 'email', nullable: true })
   email?: string | null;
 
-  @Column({ type: 'varchar', length: 255, name: 'representante_legal', nullable: true })
+  @Column({
+    type: 'varchar',
+    length: 255,
+    name: 'representante_legal',
+    nullable: true,
+  })
   representante_legal?: string | null;
 
   @Column({ type: 'int', name: 'estado', default: 1 })
   estado!: number;
 
-  @CreateDateColumn({ type: 'timestamp', name: 'fecha_creacion', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn({
+    type: 'timestamp',
+    name: 'fecha_creacion',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   fecha_creacion!: Date;
 }
 

@@ -1,4 +1,9 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity({ schema: 'freeler', name: 'usuario_freeler' })
 export class UsuarioFreelerEntity {
@@ -23,12 +28,22 @@ export class UsuarioFreelerEntity {
   @Column({ type: 'varchar', name: 'password', length: 255 })
   password!: string;
 
-  @Column({ type: 'numeric', name: 'saldo', precision: 10, scale: 2, default: 0 })
+  @Column({
+    type: 'numeric',
+    name: 'saldo',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
   saldo!: string; // TypeORM devuelve numeric como string por precisión
 
   @Column({ type: 'int', name: 'estado', default: 1 })
   estado!: number;
 
-  @CreateDateColumn({ type: 'timestamp', name: 'fecha_creacion', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn({
+    type: 'timestamp',
+    name: 'fecha_creacion',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   fecha_creacion!: Date;
 }
