@@ -3,18 +3,18 @@ import {
   LEAD_REPOSITORY,
   ILeadRepository,
 } from '../interfaces/lead.repository.interface';
-import { FindLeadsDto } from '../../infrastructure/dto/find-leads.dto';
+import { UpdateLeadDto } from '../../infrastructure/dto/update-lead.dto';
 
 @Injectable()
-export class FindLeadsByUserUseCase {
+export class UpdateLeadUseCase {
   constructor(
     @Inject(LEAD_REPOSITORY)
     private readonly repo: ILeadRepository,
   ) {}
 
-  execute(filters: FindLeadsDto) {
-    return this.repo.paginate(filters);
+  execute(id: number, dto: UpdateLeadDto) {
+    return this.repo.update(id, dto);
   }
 }
 
-export default FindLeadsByUserUseCase;
+export default UpdateLeadUseCase;

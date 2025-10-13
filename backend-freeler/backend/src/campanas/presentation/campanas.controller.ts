@@ -8,6 +8,8 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreateCampanaUseCase } from '../application/use-cases/create-campana.use-case';
@@ -19,6 +21,9 @@ import { UpdateCampanaUseCase } from '../application/use-cases/update-campana.us
 import { CreateCampanaDto } from '../infrastructure/dto/create-campana.dto';
 import { FindCampanasDto } from '../infrastructure/dto/find-campanas.dto';
 import { UpdateCampanaDto } from '../infrastructure/dto/update-campana.dto';
+import { JwtAuthGuard } from '../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard';
+import { Roles } from '../../shared/infrastructure/decorators/roles.decorator';
 
 @ApiTags('campanas')
 @Controller('campanas')
@@ -34,6 +39,8 @@ export class CampanasController {
 
   @ApiOperation({ summary: 'Crear campaña' })
   @ApiOkResponse({ description: 'Campaña creada' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'supervisor')
   @Post()
   create(@Body() dto: CreateCampanaDto) {
     return this.createUC.execute(dto);
@@ -46,22 +53,21 @@ export class CampanasController {
   }
 
   @ApiOperation({ summary: 'Actualizar campaña' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'supervisor')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateCampanaDto) {
     return this.updateUC.execute(Number(id), dto);
   }
 
   @ApiOperation({ summary: 'Desactivar (soft-delete) campaña' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'supervisor')
   @Delete(':id')
-  remove(
-    @Param('id') id: string,
-    @Query('usuarioEmpresaId') usuarioEmpresaId?: string,
-  ) {
-    const actorId = Number(usuarioEmpresaId);
-    if (!usuarioEmpresaId || Number.isNaN(actorId) || actorId <= 0) {
-      throw new BadRequestException(
-        'usuarioEmpresaId es requerido como query param',
-      );
+  remove(@Param('id') id: string, @Req() req: { user?: { sub?: number } }) {
+    const actorId = Number(req.user?.sub);
+    if (!actorId || Number.isNaN(actorId) || actorId <= 0) {
+      throw new BadRequestException('actorId inválido en token');
     }
     return this.deleteUC.execute(Number(id), actorId);
   }

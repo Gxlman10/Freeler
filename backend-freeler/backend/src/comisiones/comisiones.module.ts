@@ -5,6 +5,10 @@ import { COMISION_REPOSITORY } from './application/interfaces/comision.repositor
 import { ComisionEntity } from './infrastructure/entities/comision.entity';
 import { EstadoComisionEntity } from './infrastructure/entities/estado-comision.entity';
 import { TypeormComisionRepository } from './infrastructure/repositories/typeorm-comision.repository';
+import { PayCommissionUseCase } from './application/use-cases/pay-commission.use-case';
+import { ListComisionesUseCase } from './application/use-cases/list-comisiones.use-case';
+import { FindComisionByIdUseCase } from './application/use-cases/find-comision-by-id.use-case';
+import { GetComisionesStatsUseCase } from './application/use-cases/get-comisiones-stats.use-case';
 
 @Module({
   imports: [TypeOrmModule.forFeature([ComisionEntity, EstadoComisionEntity])],
@@ -12,6 +16,9 @@ import { TypeormComisionRepository } from './infrastructure/repositories/typeorm
   providers: [
     { provide: COMISION_REPOSITORY, useClass: TypeormComisionRepository },
     PayCommissionUseCase,
+    ListComisionesUseCase,
+    FindComisionByIdUseCase,
+    GetComisionesStatsUseCase,
   ],
   exports: [COMISION_REPOSITORY],
 })

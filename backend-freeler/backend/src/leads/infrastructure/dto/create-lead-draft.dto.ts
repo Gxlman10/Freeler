@@ -11,33 +11,39 @@ import {
   Min,
 } from 'class-validator';
 
-export class CreateLeadDto {
+export class CreateLeadDraftDto {
   @ApiProperty({ example: 10 })
   @Type(() => Number)
   @IsInt()
   @Min(1)
   usuarioFreelerId!: number;
 
-  @ApiProperty({ example: 5 })
+  @ApiPropertyOptional({ example: 5 })
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  id_campania!: number;
+  id_campania?: number;
 
-  @ApiProperty({ example: 'Landing Primavera' })
+  @ApiProperty({
+    example: 'Borrador',
+    description:
+      'Origen requerido por BD; usamos un valor por defecto si no viene',
+  })
   @IsString()
   @Length(1, 255)
   origen!: string;
 
-  @ApiProperty({ example: 'Ana' })
+  @ApiPropertyOptional({ example: 'Ana' })
+  @IsOptional()
   @IsString()
   @Length(1, 255)
-  nombres!: string;
-  @ApiProperty({ example: 'Pérez' })
+  nombres?: string;
+  @ApiPropertyOptional({ example: 'Pérez' })
+  @IsOptional()
   @IsString()
   @Length(1, 255)
-  apellidos!: string;
-
+  apellidos?: string;
   @ApiPropertyOptional({ example: '71384562' })
   @IsOptional()
   @IsString()
@@ -68,10 +74,10 @@ export class CreateLeadDto {
   @IsString()
   descripcion?: string;
 
-  @ApiPropertyOptional({ example: true })
+  @ApiPropertyOptional({ example: false })
   @IsOptional()
   @IsBoolean()
   estado_completo?: boolean;
 }
 
-export default CreateLeadDto;
+export default CreateLeadDraftDto;

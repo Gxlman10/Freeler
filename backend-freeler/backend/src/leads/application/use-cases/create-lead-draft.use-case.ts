@@ -3,32 +3,32 @@ import {
   LEAD_REPOSITORY,
   ILeadRepository,
 } from '../interfaces/lead.repository.interface';
-import { CreateLeadDto } from '../../infrastructure/dto/create-lead.dto';
+import { CreateLeadDraftDto } from '../../infrastructure/dto/create-lead-draft.dto';
 
 @Injectable()
-export class CreateLeadUseCase {
+export class CreateLeadDraftUseCase {
   constructor(
     @Inject(LEAD_REPOSITORY)
     private readonly repo: ILeadRepository,
   ) {}
 
-  execute(dto: CreateLeadDto) {
+  execute(dto: CreateLeadDraftDto) {
     return this.repo.create({
       id_usuario_freeler: dto.usuarioFreelerId,
-      id_campania: dto.id_campania,
-      origen: dto.origen,
-      nombres: dto.nombres,
-      apellidos: dto.apellidos,
+      id_campania: dto.id_campania ?? null,
+      origen: dto.origen || 'Borrador',
+      nombres: dto.nombres ?? '',
+      apellidos: dto.apellidos ?? '',
       dni: dto.dni,
       email: dto.email,
       telefono: dto.telefono,
       ocupacion: dto.ocupacion,
       ciudad: dto.ciudad,
       descripcion: dto.descripcion,
-      estado_completo: dto.estado_completo ?? true,
-      id_estado_lead: 1,
+      estado_completo: false,
+      id_estado_lead: null,
     });
   }
 }
 
-export default CreateLeadUseCase;
+export default CreateLeadDraftUseCase;

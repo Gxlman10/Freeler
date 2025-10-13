@@ -3,21 +3,18 @@ import {
   COMISION_REPOSITORY,
   IComisionRepository,
 } from '../interfaces/comision.repository.interface';
+import FindComisionesDto from '../../infrastructure/dto/find-comisiones.dto';
 
 @Injectable()
-export class PayCommissionUseCase {
+export class ListComisionesUseCase {
   constructor(
     @Inject(COMISION_REPOSITORY)
     private readonly repo: IComisionRepository,
   ) {}
 
-  async execute(id: number) {
-    const updated = await this.repo.update(id, {
-      id_estado_comision: 3, // Cobrada
-      fecha_pago: new Date(),
-    });
-    return updated;
+  execute(filters: FindComisionesDto) {
+    return this.repo.paginate(filters);
   }
 }
 
-export default PayCommissionUseCase;
+export default ListComisionesUseCase;
