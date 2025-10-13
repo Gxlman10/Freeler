@@ -29,7 +29,7 @@ export class FindCampanasDto extends PaginationDto {
   @ApiPropertyOptional({ example: 'primavera' })
   @IsOptional()
   @IsString()
-  search?: string;
+  override search?: string = undefined;
 }
 
 export default FindCampanasDto;
