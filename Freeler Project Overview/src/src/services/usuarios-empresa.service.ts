@@ -1,14 +1,24 @@
 import api from '../lib/api';
 
 export interface UsuarioEmpresa {
-  id: string;
-  nombre_empresa: string;
-  ruc: string;
+  id_usuario_empresa: number;
+  id_empresa?: number | null;
+  id_rol?: number | null;
+  nombres: string;
+  apellidos: string;
   email: string;
-  telefono?: string;
-  direccion?: string;
-  activo?: boolean;
-  fecha_creacion?: string;
+  estado: number;
+  fecha_creacion: string;
+}
+
+export interface CreateUsuarioEmpresaPayload {
+  id_empresa: number;
+  id_rol: number;
+  nombres: string;
+  apellidos: string;
+  email: string;
+  password: string;
+  estado?: number;
 }
 
 export interface PaginatedResponse<T> {
@@ -17,40 +27,33 @@ export interface PaginatedResponse<T> {
 }
 
 export const usuariosEmpresaService = {
-  // Ping del recurso
   ping: async () => {
     const res = await api.get('/usuarios-empresa/ping');
     return res.data;
   },
 
-  // Crear usuario de empresa
-  create: async (data: Omit<UsuarioEmpresa, 'id'> & { password: string }) => {
+  create: async (data: CreateUsuarioEmpresaPayload) => {
     const res = await api.post<UsuarioEmpresa>('/usuarios-empresa', data);
     return res.data;
   },
 
-  // Listado
   list: async (params?: { page?: number; limit?: number; search?: string }) => {
     const res = await api.get<PaginatedResponse<UsuarioEmpresa>>('/usuarios-empresa', { params });
     return res.data;
   },
 
-  // Detalle
-  getById: async (id: string) => {
+  getById: async (id: number | string) => {
     const res = await api.get<UsuarioEmpresa>(`/usuarios-empresa/${id}`);
     return res.data;
   },
 
-  // Actualizar
-  update: async (id: string, data: Partial<UsuarioEmpresa>) => {
+  update: async (id: number | string, data: Partial<UsuarioEmpresa>) => {
     const res = await api.patch<UsuarioEmpresa>(`/usuarios-empresa/${id}`, data);
     return res.data;
   },
 
-  // Soft delete
-  remove: async (id: string) => {
+  remove: async (id: number | string) => {
     const res = await api.delete(`/usuarios-empresa/${id}`);
     return res.data;
   },
 };
-

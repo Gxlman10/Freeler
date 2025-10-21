@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'sonner@2.0.3';
+import { Toaster } from 'sonner';
 import { ProtectedRoute } from './src/components/ProtectedRoute';
 
 // Pages
@@ -12,8 +12,17 @@ import { RegisterFreeler } from './src/pages/auth/RegisterFreeler';
 import { DashboardFreeler } from './src/pages/freeler/DashboardFreeler';
 import { LeadsListFreeler } from './src/pages/freeler/LeadsListFreeler';
 import { CreateLead } from './src/pages/freeler/CreateLead';
+import { LeadDetailFreeler } from './src/pages/freeler/LeadDetailFreeler';
+import { CampanasFreeler } from './src/pages/freeler/CampanasFreeler';
 import { DashboardEmpresa } from './src/pages/empresa/DashboardEmpresa';
 import { LeadsListEmpresa } from './src/pages/empresa/LeadsListEmpresa';
+import { CampanasListEmpresa } from './src/pages/empresa/CampanasListEmpresa';
+import { UsuariosEmpresa } from './src/pages/empresa/UsuariosEmpresa';
+import { CampanaCreateEmpresa } from './src/pages/empresa/CampanaCreateEmpresa';
+import { UsuarioEmpresaCreate } from './src/pages/empresa/UsuarioEmpresaCreate';
+import { CampanaEditEmpresa } from './src/pages/empresa/CampanaEditEmpresa';
+import { LeadDetailEmpresa } from './src/pages/empresa/LeadDetailEmpresa';
+import { UsuarioEmpresaEdit } from './src/pages/empresa/UsuarioEmpresaEdit';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +71,22 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/freeler/leads/:id"
+            element={
+              <ProtectedRoute requiredType="freeler">
+                <LeadDetailFreeler />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freeler/campanas"
+            element={
+              <ProtectedRoute requiredType="freeler">
+                <CampanasFreeler />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Empresa Routes */}
           <Route
@@ -77,6 +102,62 @@ export default function App() {
             element={
               <ProtectedRoute requiredType="empresa">
                 <LeadsListEmpresa />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/empresa/campanas"
+            element={
+              <ProtectedRoute requiredType="empresa">
+                <CampanasListEmpresa />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/empresa/campanas/new"
+            element={
+              <ProtectedRoute requiredType="empresa">
+                <CampanaCreateEmpresa />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/empresa/campanas/:id/edit"
+            element={
+              <ProtectedRoute requiredType="empresa">
+                <CampanaEditEmpresa />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/empresa/usuarios"
+            element={
+              <ProtectedRoute requiredType="empresa">
+                <UsuariosEmpresa />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/empresa/usuarios/new"
+            element={
+              <ProtectedRoute requiredType="empresa">
+                <UsuarioEmpresaCreate />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/empresa/usuarios/:id/edit"
+            element={
+              <ProtectedRoute requiredType="empresa">
+                <UsuarioEmpresaEdit />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/empresa/leads/:id"
+            element={
+              <ProtectedRoute requiredType="empresa">
+                <LeadDetailEmpresa />
               </ProtectedRoute>
             }
           />

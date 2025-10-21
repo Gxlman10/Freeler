@@ -28,6 +28,6 @@ import { RolEntity } from '../roles/infrastructure/entities/rol.entity';
     UpdateUsuarioEmpresaUseCase,
     SoftDeleteUsuarioEmpresaUseCase,
   ],
-  exports: [USUARIO_EMPRESA_REPOSITORY],
+  exports: [USUARIO_EMPRESA_REPOSITORY, CreateUsuarioEmpresaUseCase],
 })
 export class UsuariosEmpresaModule {}

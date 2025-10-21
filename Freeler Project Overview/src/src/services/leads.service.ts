@@ -1,34 +1,65 @@
-import api from '../lib/api';
+﻿import api from '../lib/api';
 
 export interface Lead {
-  id: string;
-  nombre_cliente: string;
+  id_lead: number;
+  id_campania?: number | null;
+  id_usuario_freeler?: number | null;
+  nombres: string;
+  apellidos: string;
+  dni?: string | null;
+  email?: string | null;
+  telefono?: string | null;
+  ocupacion?: string | null;
+  ciudad?: string | null;
+  descripcion?: string | null;
+  origen: string;
+  id_estado_lead?: number | null;
+  estado_completo: boolean;
+  fecha_creacion: string;
+  campania?: {
+    id_campania: number;
+    nombre: string;
+  } | null;
+  freeler?: {
+    id_usuario_freeler: number;
+    nombres: string;
+    apellidos: string;
+  } | null;
+}
+
+export interface CreateLeadRequest {
+  usuarioFreelerId: number;
+  id_campania: number;
+  origen: string;
+  nombres: string;
+  apellidos: string;
   email?: string;
   telefono?: string;
-  empresa?: string;
-  cargo?: string;
-  notas?: string;
-  estado_lead_id: number;
-  campana_id: string;
-  usuario_freeler_id: string;
-  fecha_creacion: string;
-  fecha_actualizacion: string;
-  campana?: {
-    id: string;
-    nombre: string;
-  };
-  usuario_freeler?: {
-    id: string;
-    nombre: string;
-    apellido: string;
-  };
-  asignacion?: {
-    id: string;
-    usuario_empresa_id: string;
-    activa: boolean;
-    fecha_asignacion: string;
-  };
+  dni?: string;
+  ocupacion?: string;
+  ciudad?: string;
+  descripcion?: string;
+  estado_completo?: boolean;
 }
+
+export interface CreateLeadDraftRequest {
+  usuarioFreelerId: number;
+  origen: string;
+  id_campania?: number;
+  nombres?: string;
+  apellidos?: string;
+  email?: string;
+  telefono?: string;
+  dni?: string;
+  ocupacion?: string;
+  ciudad?: string;
+  descripcion?: string;
+  estado_completo?: boolean;
+}
+
+export type UpdateLeadRequest = Partial<CreateLeadRequest> & {
+  usuarioFreelerId?: number;
+};
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -45,7 +76,17 @@ export const leadsService = {
     fecha_desde?: string;
     fecha_hasta?: string;
   }) => {
-    const response = await api.get<PaginatedResponse<Lead>>('/leads', { params });
+    const mapped: Record<string, unknown> = {};
+    if (params) {
+      if (params.page) mapped.page = params.page;
+      if (params.limit) mapped.limit = params.limit;
+      if (params.search) mapped.search = params.search;
+      if (params.campana_id) mapped.id_campania = Number(params.campana_id);
+      if (params.estado_lead_id) mapped.id_estado_lead = Number(params.estado_lead_id);
+      if (params.fecha_desde) mapped.fecha_desde = params.fecha_desde;
+      if (params.fecha_hasta) mapped.fecha_hasta = params.fecha_hasta;
+    }
+    const response = await api.get<PaginatedResponse<Lead>>('/leads', { params: mapped });
     return response.data;
   },
 
@@ -55,7 +96,13 @@ export const leadsService = {
   },
 
   getMine: async (usuarioFreelerId: string, params?: { page?: number; limit?: number; search?: string }) => {
-    const response = await api.get<PaginatedResponse<Lead>>(`/leads/mine/by-user/${usuarioFreelerId}`, { params });
+    const mapped: Record<string, unknown> = {};
+    if (params) {
+      if (params.page) mapped.page = params.page;
+      if (params.limit) mapped.limit = params.limit;
+      if (params.search) mapped.search = params.search;
+    }
+    const response = await api.get<PaginatedResponse<Lead>>(`/leads/mine/by-user/${Number(usuarioFreelerId)}`, { params: mapped });
     return response.data;
   },
 
@@ -64,47 +111,50 @@ export const leadsService = {
     return response.data;
   },
 
-  createDraft: async (data: Partial<Lead>) => {
+  createDraft: async (data: CreateLeadDraftRequest) => {
     const response = await api.post<Lead>('/leads/draft', data);
     return response.data;
   },
 
-  create: async (data: Partial<Lead>) => {
+  create: async (data: CreateLeadRequest) => {
     const response = await api.post<Lead>('/leads', data);
     return response.data;
   },
 
   // Actualiza un lead existente
-  update: async (id: string, data: Partial<Lead>) => {
+  update: async (id: string, data: UpdateLeadRequest) => {
     const response = await api.patch<Lead>(`/leads/${id}`, data);
     return response.data;
   },
 
-  assign: async (leadId: string, usuarioEmpresaId: string) => {
+  assign: async (leadId: string, usuarioEmpresaId: string, asignarAUsuarioEmpresaId?: string) => {
+    const targetId = asignarAUsuarioEmpresaId ?? usuarioEmpresaId;
     const response = await api.post(`/leads/assign`, {
-      lead_id: leadId,
-      usuario_empresa_id: usuarioEmpresaId,
+      leadId: Number(leadId),
+      usuarioEmpresaId: Number(usuarioEmpresaId),
+      asignarAUsuarioEmpresaId: Number(targetId),
     });
     return response.data;
   },
 
-  assignSelf: async (leadId: string) => {
-    const response = await api.post(`/leads/assign/self`, { lead_id: leadId });
+  assignSelf: async (leadId: string, usuarioEmpresaId: string) => {
+    const response = await api.post(`/leads/assign/self`, { leadId: Number(leadId), usuarioEmpresaId: Number(usuarioEmpresaId) });
     return response.data;
   },
 
-  updateStatus: async (leadId: string, estadoLeadId: number) => {
+  updateStatus: async (leadId: string, id_estado_lead: number, usuarioEmpresaId: string) => {
     const response = await api.post(`/leads/status`, {
-      lead_id: leadId,
-      estado_lead_id: estadoLeadId,
+      leadId: Number(leadId),
+      id_estado_lead: Number(id_estado_lead),
+      usuarioEmpresaId: Number(usuarioEmpresaId),
     });
     return response.data;
   },
 
-  markSold: async (leadId: string, montoVenta: number) => {
+  markSold: async (leadId: string, usuarioEmpresaId: string) => {
     const response = await api.post(`/leads/mark-sold`, {
-      lead_id: leadId,
-      monto_venta: montoVenta,
+      leadId: Number(leadId),
+      usuarioEmpresaId: Number(usuarioEmpresaId),
     });
     return response.data;
   },
@@ -120,13 +170,13 @@ export const leadsService = {
     return response.data;
   },
 
-  // Actualiza una asignación de lead
+  // Actualiza una asignaciÃ³n de lead
   updateAssignment: async (assignmentId: string, data: { activa?: boolean }) => {
     const response = await api.patch(`/leads/assignments/${assignmentId}`, data);
     return response.data;
   },
 
-  // Actualización masiva de asignaciones
+  // ActualizaciÃ³n masiva de asignaciones
   bulkUpdateAssignments: async (payload: Record<string, unknown>) => {
     const response = await api.patch('/leads/assignments/bulk', payload);
     return response.data;
@@ -138,3 +188,4 @@ export const leadsService = {
     return response.data;
   },
 };
+

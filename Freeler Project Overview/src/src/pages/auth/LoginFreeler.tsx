@@ -4,7 +4,7 @@ import { Mail, Lock } from 'lucide-react';
 import { Button } from '../../components/base/Button';
 import { authService } from '../../services/auth.service';
 import { setToken } from '../../utils/auth';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 export function LoginFreeler() {
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ export function LoginFreeler() {
       toast.success('¡Bienvenido!');
       navigate('/freeler');
     } catch (error) {
-      // Error manejado por interceptor
+      // El interceptor ya muestra el error
     } finally {
       setLoading(false);
     }
@@ -99,3 +99,6 @@ export function LoginFreeler() {
     </div>
   );
 }
+
+export default LoginFreeler;
+

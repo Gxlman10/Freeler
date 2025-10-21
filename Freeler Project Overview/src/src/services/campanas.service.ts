@@ -1,15 +1,16 @@
 import api from '../lib/api';
 
 export interface Campana {
-  id: string;
+  id_campania: number;
+  id_empresa?: number | null;
   nombre: string;
-  descripcion?: string;
+  descripcion?: string | null;
+  ubicacion?: string | null;
+  comision: string;
   fecha_inicio: string;
-  fecha_fin?: string;
-  comision_porcentaje?: number;
-  comision_fija?: number;
-  activa: boolean;
-  empresa_id: string;
+  fecha_fin: string;
+  estado?: number;
+  fecha_creacion?: string;
 }
 
 export interface CampanaStats {
@@ -39,12 +40,12 @@ export const campanasService = {
     return response.data;
   },
 
-  create: async (data: Partial<Campana>) => {
+  create: async (data: Record<string, unknown>) => {
     const response = await api.post<Campana>('/campanas', data);
     return response.data;
   },
 
-  update: async (id: string, data: Partial<Campana>) => {
+  update: async (id: string, data: Record<string, unknown>) => {
     const response = await api.patch<Campana>(`/campanas/${id}`, data);
     return response.data;
   },

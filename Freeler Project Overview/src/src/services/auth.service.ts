@@ -1,13 +1,7 @@
 import api from '../lib/api';
 
-export interface LoginResponse {
+export interface AuthTokenResponse {
   access_token: string;
-  user: {
-    id: string;
-    email: string;
-    type: 'empresa' | 'freeler';
-    role?: string;
-  };
 }
 
 export interface RegisterEmpresaData {
@@ -29,31 +23,31 @@ export interface RegisterFreelerData {
 }
 
 export const authService = {
-  loginEmpresa: async (email: string, password: string): Promise<LoginResponse> => {
-    const response = await api.post<LoginResponse>('/auth/empresa/login', {
+  loginEmpresa: async (email: string, password: string): Promise<AuthTokenResponse> => {
+    const response = await api.post<AuthTokenResponse>('/auth/empresa/login', {
       email,
       password,
     });
     return response.data;
   },
 
-  loginFreeler: async (email: string, password: string): Promise<LoginResponse> => {
-    const response = await api.post<LoginResponse>('/auth/freeler/login', {
+  loginFreeler: async (email: string, password: string): Promise<AuthTokenResponse> => {
+    const response = await api.post<AuthTokenResponse>('/auth/freeler/login', {
       email,
       password,
     });
     return response.data;
   },
 
-  // Registra una empresa mediante endpoint de usuarios-empresa (sin prefijo auth)
-  registerEmpresa: async (data: RegisterEmpresaData): Promise<LoginResponse> => {
-    const response = await api.post<LoginResponse>('/usuarios-empresa', data);
+  // Registra una empresa y devuelve token
+  registerEmpresa: async (data: RegisterEmpresaData): Promise<AuthTokenResponse> => {
+    const response = await api.post<AuthTokenResponse>('/auth/empresa/register', data);
     return response.data;
   },
 
   // Registra un usuario freeler (no requiere JWT)
   // Mapea a los nombres de campos que espera el backend
-  registerFreeler: async (data: RegisterFreelerData): Promise<LoginResponse> => {
+  registerFreeler: async (data: RegisterFreelerData): Promise<AuthTokenResponse> => {
     const payload: Record<string, unknown> = {
       nombres: data.nombre,
       apellidos: data.apellido,
@@ -62,7 +56,7 @@ export const authService = {
       dni: data.dni,
     };
     if (data.telefono) payload.telefono = data.telefono;
-    const response = await api.post<LoginResponse>('/usuarios-freeler/register', payload);
+    const response = await api.post<AuthTokenResponse>('/usuarios-freeler/register', payload);
     return response.data;
   },
 

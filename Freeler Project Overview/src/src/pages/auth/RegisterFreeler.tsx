@@ -4,7 +4,7 @@ import { Mail, Lock, User, Phone, CreditCard } from 'lucide-react';
 import { Button } from '../../components/base/Button';
 import { authService, RegisterFreelerData } from '../../services/auth.service';
 import { setToken } from '../../utils/auth';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 export function RegisterFreeler() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export function RegisterFreeler() {
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       [e.target.name]: e.target.value,
     }));
@@ -28,31 +28,30 @@ export function RegisterFreeler() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (formData.password !== confirmPassword) {
-      toast.error('Las contrase��as no coinciden');
+      toast.error('Las contraseñas no coinciden');
       return;
     }
 
     if (formData.password.length < 8) {
-      toast.error('La contrase��a debe tener al menos 8 caracteres');
+      toast.error('La contraseña debe tener al menos 8 caracteres');
       return;
     }
 
     if (formData.dni.length !== 8) {
-      toast.error('El DNI debe tener 8 d��gitos');
+      toast.error('El DNI debe tener 8 dígitos');
       return;
     }
 
     setLoading(true);
-
     try {
       const response = await authService.registerFreeler(formData);
       setToken(response.access_token);
-      toast.success('��Registro exitoso! Bienvenido');
+      toast.success('Registro exitoso, ¡bienvenido!');
       navigate('/freeler');
     } catch (error) {
-      // Error manejado por interceptor
+      // El interceptor ya notifica el error
     } finally {
       setLoading(false);
     }
@@ -65,12 +64,11 @@ export function RegisterFreeler() {
           <div className="mb-8 text-center">
             <h1 className="text-[--color-primary] mb-2">Freeler</h1>
             <h2 className="text-[--color-text] mb-2">Registro de Freeler</h2>
-            <p className="text-sm text-gray-400">�snete y comienza a ganar comisiones por tus referidos</p>
+            <p className="text-sm text-gray-400">Únete y comienza a ganar comisiones por tus referidos</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Nombre */}
               <div>
                 <label htmlFor="nombre" className="block text-sm mb-2 text-[--color-text]">
                   Nombre *
@@ -90,7 +88,6 @@ export function RegisterFreeler() {
                 </div>
               </div>
 
-              {/* Apellido */}
               <div>
                 <label htmlFor="apellido" className="block text-sm mb-2 text-[--color-text]">
                   Apellido *
@@ -104,13 +101,12 @@ export function RegisterFreeler() {
                     value={formData.apellido}
                     onChange={handleChange}
                     className="w-full pl-10 pr-4 py-2 bg-[--color-bg] border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[--color-primary] text-[--color-text]"
-                    placeholder="PǸrez"
+                    placeholder="Pérez"
                     required
                   />
                 </div>
               </div>
 
-              {/* DNI */}
               <div>
                 <label htmlFor="dni" className="block text-sm mb-2 text-[--color-text]">
                   DNI *
@@ -130,13 +126,12 @@ export function RegisterFreeler() {
                     required
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">8 d��gitos</p>
+                <p className="text-xs text-gray-500 mt-1">8 dígitos</p>
               </div>
 
-              {/* TelǸfono */}
               <div>
                 <label htmlFor="telefono" className="block text-sm mb-2 text-[--color-text]">
-                  TelǸfono
+                  Teléfono
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -152,7 +147,6 @@ export function RegisterFreeler() {
                 </div>
               </div>
 
-              {/* Email */}
               <div className="md:col-span-2">
                 <label htmlFor="email" className="block text-sm mb-2 text-[--color-text]">
                   Email *
@@ -172,10 +166,9 @@ export function RegisterFreeler() {
                 </div>
               </div>
 
-              {/* Contrase��a */}
               <div>
                 <label htmlFor="password" className="block text-sm mb-2 text-[--color-text]">
-                  Contrase��a *
+                  Contraseña *
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -186,28 +179,29 @@ export function RegisterFreeler() {
                     value={formData.password}
                     onChange={handleChange}
                     className="w-full pl-10 pr-4 py-2 bg-[--color-bg] border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[--color-primary] text-[--color-text]"
-                    placeholder="�?��?��?��?��?��?��?��?�"
+                    placeholder="••••••••"
                     minLength={8}
                     required
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">M��nimo 8 caracteres</p>
+                <p className="text-xs text-gray-500 mt-1">Mínimo 8 caracteres</p>
               </div>
 
-              {/* Confirmar Contrase��a */}
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm mb-2 text-[--color-text]">
-                  Confirmar Contrase��a *
+                  Confirmar contraseña *
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                   <input
                     id="confirmPassword"
+                    name="confirmPassword"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-[--color-bg] border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[--color-primary] text-[--color-text]"
-                    placeholder="�?��?��?��?��?��?��?��?�"
+                    placeholder="••••••••"
+                    minLength={8}
                     required
                   />
                 </div>
@@ -215,23 +209,16 @@ export function RegisterFreeler() {
             </div>
 
             <Button type="submit" className="w-full" loading={loading}>
-              Crear Cuenta
+              Registrarme
             </Button>
           </form>
 
-          <div className="mt-6 text-center space-y-2">
+          <div className="mt-6 text-center">
             <button
               onClick={() => navigate('/auth/freeler')}
               className="text-sm text-[--color-secondary] hover:underline"
             >
-              ��Ya tienes cuenta? Inicia sesi��n
-            </button>
-            <div className="text-gray-600">|</div>
-            <button
-              onClick={() => navigate('/auth/empresa/register')}
-              className="text-sm text-[--color-primary] hover:underline"
-            >
-              ��Eres Empresa? Reg��strate aqu��
+              ¿Ya tienes cuenta? Inicia sesión
             </button>
           </div>
         </div>
@@ -239,4 +226,6 @@ export function RegisterFreeler() {
     </div>
   );
 }
+
+export default RegisterFreeler;
 

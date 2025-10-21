@@ -9,6 +9,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsuariosEmpresaModule } from '../usuarios-empresa/usuarios-empresa.module';
 import { UsuariosFreelerModule } from '../usuarios-freeler/usuarios-freeler.module';
+import { EmpresasModule } from '../empresas/empresas.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { UsuariosFreelerModule } from '../usuarios-freeler/usuarios-freeler.modu
     }),
     UsuariosEmpresaModule,
     UsuariosFreelerModule,
+    EmpresasModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtAuthGuard, RolesGuard],

@@ -29,7 +29,7 @@ export class AuthService {
       sub: user.id_usuario_empresa,
       type: 'empresa' as const,
       email: user.email,
-      role: user.rol?.nombre ?? undefined,
+      role: (user.rol?.nombre as string | undefined) ?? 'admin',
     };
     return { access_token: await this.jwt.signAsync(payload) };
   }

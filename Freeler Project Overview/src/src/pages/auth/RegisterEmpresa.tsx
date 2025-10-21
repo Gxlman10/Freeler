@@ -4,7 +4,7 @@ import { Mail, Lock, Building2, Phone, MapPin, FileText } from 'lucide-react';
 import { Button } from '../../components/base/Button';
 import { authService, RegisterEmpresaData } from '../../services/auth.service';
 import { setToken } from '../../utils/auth';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 export function RegisterEmpresa() {
   const navigate = useNavigate();

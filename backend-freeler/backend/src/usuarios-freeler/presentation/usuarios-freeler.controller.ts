@@ -19,6 +19,7 @@ import { ListUsuariosFreelerUseCase } from '../application/use-cases/list-usuari
 import { SoftDeleteUsuarioFreelerUseCase } from '../application/use-cases/soft-delete-usuario-freeler.use-case';
 import { GetUsuarioStatsUseCase } from '../application/use-cases/get-usuario-stats.use-case';
 import { DataSource } from 'typeorm';
+import { JwtService } from '@nestjs/jwt';
 
 type DbCheckResponse = {
   db: string | null;
@@ -44,6 +45,7 @@ export class UsuariosFreelerController {
     private readonly softDelUC: SoftDeleteUsuarioFreelerUseCase,
     private readonly statsUC: GetUsuarioStatsUseCase,
     private readonly ds: DataSource,
+    private readonly jwt: JwtService,
   ) {}
 
   @Get('db-check')
@@ -75,11 +77,17 @@ export class UsuariosFreelerController {
     return response;
   }
 
-  @ApiOperation({ summary: 'Registrar usuario freeler (sin JWT)' })
-  @ApiOkResponse({ description: 'Usuario registrado' })
+  @ApiOperation({ summary: 'Registrar usuario freeler y devolver JWT' })
+  @ApiOkResponse({ description: 'Token emitido' })
   @Post('register')
-  register(@Body() dto: CreateUsuarioFreelerDto) {
-    return this.registerUC.execute(dto);
+  async register(@Body() dto: CreateUsuarioFreelerDto) {
+    const user = await this.registerUC.execute(dto);
+    const payload = {
+      sub: (user as any).id_usuario_freeler,
+      type: 'freeler' as const,
+      email: user.email,
+    };
+    return { access_token: await this.jwt.signAsync(payload) };
   }
 
   @ApiOperation({ summary: 'Obtener usuario por ID' })

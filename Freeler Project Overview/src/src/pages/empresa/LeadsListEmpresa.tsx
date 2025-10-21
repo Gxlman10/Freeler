@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Search, Filter, Eye } from 'lucide-react';
@@ -20,6 +20,10 @@ export function LeadsListEmpresa() {
   const { data: campanasData } = useQuery({
     queryKey: ['campanas'],
     queryFn: () => campanasService.getAll({ limit: 100 }),
+  });
+  const { data: estadosLead } = useQuery({
+    queryKey: ['leads-estados'],
+    queryFn: () => leadsService.getEstadosCatalogo(),
   });
 
   const { data, isLoading } = useQuery({
@@ -48,7 +52,7 @@ export function LeadsListEmpresa() {
             <Button variant="ghost" size="sm" onClick={() => navigate('/empresa')} iconStart={<ArrowLeft className="h-4 w-4" />}>
               Volver
             </Button>
-            <h1 className="text-[--color-text]">Gestión de Leads</h1>
+            <h1 className="text-[--color-text]">GestiÃ³n de Leads</h1>
           </div>
         </div>
       </header>
@@ -77,7 +81,7 @@ export function LeadsListEmpresa() {
               />
             </div>
 
-            {/* Campaña */}
+            {/* CampaÃ±a */}
             <select
               value={campaniaFilter}
               onChange={(e) => {
@@ -86,7 +90,7 @@ export function LeadsListEmpresa() {
               }}
               className="px-4 py-2 bg-[--color-bg] border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[--color-primary] text-[--color-text]"
             >
-              <option value="">Todas las campañas</option>
+              <option value="">Todas las campaÃ±as</option>
               {campanas.map(c => (
                 <option key={c.id} value={c.id}>{c.nombre}</option>
               ))}
@@ -102,9 +106,9 @@ export function LeadsListEmpresa() {
               className="px-4 py-2 bg-[--color-bg] border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[--color-primary] text-[--color-text]"
             >
               <option value="">Todos los estados</option>
-              <option value="1">En Gestión</option>
-              <option value="2">Ganado</option>
-              <option value="3">Perdido</option>
+              {Array.isArray(estadosLead) && estadosLead.map((s: any) => (
+                <option key={s.id_estado_lead} value={s.id_estado_lead}>{s.nombre}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -124,7 +128,7 @@ export function LeadsListEmpresa() {
                 <thead className="bg-gray-800/50">
                   <tr>
                     <th className="px-4 py-3 text-left text-sm text-gray-400">Cliente</th>
-                    <th className="px-4 py-3 text-left text-sm text-gray-400">Campaña</th>
+                    <th className="px-4 py-3 text-left text-sm text-gray-400">CampaÃ±a</th>
                     <th className="px-4 py-3 text-left text-sm text-gray-400">Freeler</th>
                     <th className="px-4 py-3 text-left text-sm text-gray-400">Estado</th>
                     <th className="px-4 py-3 text-left text-sm text-gray-400">Fecha</th>
@@ -133,10 +137,10 @@ export function LeadsListEmpresa() {
                 </thead>
                 <tbody className="divide-y divide-gray-800">
                   {leads.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-gray-800/30">
+                    <tr key={lead.id_lead} className="hover:bg-gray-800/30">
                       <td className="px-4 py-3 text-[--color-text]">
                         <div>
-                          <div>{lead.nombre_cliente}</div>
+                          <div>{`${lead.nombres} ${lead.apellidos}`}</div>
                           {lead.email && <div className="text-sm text-gray-400">{lead.email}</div>}
                         </div>
                       </td>
@@ -144,12 +148,10 @@ export function LeadsListEmpresa() {
                         {lead.campana?.nombre || '-'}
                       </td>
                       <td className="px-4 py-3 text-gray-400 text-sm">
-                        {lead.usuario_freeler ? 
-                          `${lead.usuario_freeler.nombre} ${lead.usuario_freeler.apellido}` 
-                          : '-'}
+                        {lead.freeler ? `${lead.freeler.nombres} ${lead.freeler.apellidos}` : '-'}
                       </td>
                       <td className="px-4 py-3">
-                        <LeadStatusBadge status={lead.estado_lead_id} />
+                        <LeadStatusBadge status={lead.id_estado_lead ?? 0} />
                       </td>
                       <td className="px-4 py-3 text-gray-400 text-sm">
                         {formatDate(lead.fecha_creacion)}
@@ -158,7 +160,7 @@ export function LeadsListEmpresa() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate(`/empresa/leads/${lead.id}`)}
+                          onClick={() => navigate(`/empresa/leads/${lead.id_lead}`)}
                           iconStart={<Eye className="h-4 w-4" />}
                         >
                           Ver
@@ -182,7 +184,7 @@ export function LeadsListEmpresa() {
                   Anterior
                 </Button>
                 <span className="text-sm text-gray-400">
-                  Página {page} de {totalPages}
+                  PÃ¡gina {page} de {totalPages}
                 </span>
                 <Button
                   variant="ghost"
@@ -200,3 +202,11 @@ export function LeadsListEmpresa() {
     </div>
   );
 }
+
+
+
+
+
+
+
+

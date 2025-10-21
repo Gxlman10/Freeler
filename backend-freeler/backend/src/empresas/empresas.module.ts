@@ -21,5 +21,6 @@ import { EmpresasController } from './presentation/empresas.controller';
     UpdateEmpresaUseCase,
     SoftDeleteEmpresaUseCase,
   ],
+  exports: [CreateEmpresaUseCase],
 })
 export class EmpresasModule {}

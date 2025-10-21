@@ -11,9 +11,20 @@ import { UpdateUsuarioFreelerUseCase } from './application/use-cases/update-usua
 import { GetUsuarioStatsUseCase } from './application/use-cases/get-usuario-stats.use-case';
 import { ListUsuariosFreelerUseCase } from './application/use-cases/list-usuarios-freeler.use-case';
 import { SoftDeleteUsuarioFreelerUseCase } from './application/use-cases/soft-delete-usuario-freeler.use-case';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UsuarioFreelerEntity])],
+  imports: [
+    TypeOrmModule.forFeature([UsuarioFreelerEntity]),
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (cfg: ConfigService) => ({
+        secret: cfg.get<string>('jwt.secret'),
+        signOptions: { expiresIn: cfg.get<string>('jwt.expiresIn') },
+      }),
+    }),
+  ],
   controllers: [UsuariosFreelerController],
   providers: [
     {

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 const API_BASE_URL = typeof import.meta.env !== 'undefined' && import.meta.env.VITE_API_BASE_URL 
   ? import.meta.env.VITE_API_BASE_URL 
