@@ -27,6 +27,7 @@ import { SoftDeleteUsuarioFreelerUseCase } from './application/use-cases/soft-de
     ListUsuariosFreelerUseCase,
     SoftDeleteUsuarioFreelerUseCase,
   ],
+  exports: [USUARIO_FREELER_REPOSITORY],
 })
 export class UsuariosFreelerModule {}
 export default UsuariosFreelerModule;
