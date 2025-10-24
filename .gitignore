@@ -1,0 +1,26 @@
+# Node / TypeScript
+node_modules
+*.tsbuildinfo
+
+# Build outputs
+frontend-freeler/frontend/dist
+backend-freeler/backend/dist
+coverage
+
+# Environment files
+*.env
+*.env.*
+!.env.example
+frontend-freeler/frontend/.env.local
+backend-freeler/backend/.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

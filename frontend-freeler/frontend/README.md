@@ -1,69 +1,81 @@
-# React + TypeScript + Vite
+# Freeler Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicacion web en React + Vite para la plataforma Freeler. Incluye los portales de **Referidos** y **CRM** con autenticacion basada en JWT emitidos por el backend NestJS.
 
-Currently, two official plugins are available:
+## Requisitos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- [Node.js](https://nodejs.org/) 18 LTS o superior
+- npm 9+
 
-## Expanding the ESLint configuration
+## Instalacion y ejecucion local
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd frontend-freeler/frontend
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Por defecto Vite se levanta en `http://localhost:5173`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Variables de entorno
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Crea un archivo `.env.local` en `frontend-freeler/frontend/` con las siguientes claves:
+
+```env
+VITE_APP_NAME=Freeler
+VITE_API_URL=http://localhost:3000
+VITE_DEFAULT_THEME=system
 ```
+
+- `VITE_API_URL` debe apuntar a la URL publica del backend NestJS. Para el entorno cloud usa la direccion HTTPS del API desplegada en AWS (por ejemplo `https://api.freeler.xyz`).
+- `VITE_DEFAULT_THEME` acepta `light`, `dark` o `system`.
+
+## Scripts disponibles
+
+| Comando           | Descripcion                                         |
+| ----------------- | --------------------------------------------------- |
+| `npm run dev`     | Levanta Vite con HMR                                 |
+| `npm run build`   | Genera la version optimizada en `dist/`             |
+| `npm run preview` | Sirve el build generado para verificacion rapida     |
+| `npm run lint`    | Ejecuta ESLint con la configuracion recomendada     |
+
+## Flujo de autenticacion
+
+- **Referidos**: usa `POST /auth/freeler/login` y `POST /usuarios-freeler/register`. El registro requiere DNI de 8 digitos, correo valido y contrasena con letras y numeros.
+- **CRM**: el registro de empresa (`POST /auth/empresa/register`) crea un usuario con rol ADMIN ligado a la nueva empresa y redirige al modulo de Usuarios para crear cuentas adicionales (Superadmin, Vendedor, Analitica).
+
+## Datos de ejemplo
+
+Puedes invocar directamente los endpoints desde la terminal para cargar datos de prueba:
+
+```bash
+# Registrar empresa (recibe token tipo empresa)
+curl -X POST "$VITE_API_URL/auth/empresa/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre_empresa": "Empresa Demo SAC",
+    "ruc": "20601234567",
+    "email": "admin@demo.com",
+    "password": "Admin123",
+    "telefono": "+51999999999"
+  }'
+
+# Registrar usuario freeler
+curl -X POST "$VITE_API_URL/usuarios-freeler/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombres": "Andrea",
+    "apellidos": "Rojas",
+    "dni": "71384562",
+    "email": "andrea@demo.com",
+    "password": "Freeler123"
+  }'
+```
+
+Los tokens devueltos se guardan en LocalStorage (`freeler:auth:user`, `freeler:auth:token`). Para cerrar sesion usa el menu en el header o en el lateral del CRM.
+
+## Convenciones
+
+- Utiliza las constantes de `APP_ROUTES` (`src/utils/constants.ts`) para crear enlaces o redirecciones.
+- Las validaciones comunes (RUC, DNI, correo, contrasena) estan en `src/utils/validators.ts`.
+- Los componentes atomicos viven en `src/components/ui` y los compuestos en `src/components/common`.
