@@ -19,7 +19,6 @@ export type LeadDraft = {
 export type Lead = LeadDraft & {
   id_lead: number;
   id_usuario_freeler?: number | null;
-  id_estado_lead?: number | null;
   fecha_creacion?: string;
   campania?: {
     id_campania: number;
@@ -44,6 +43,47 @@ const mapLeadPayload = (payload: Partial<LeadDraft>) => {
   };
 };
 
+export const unwrapLeadCollection = <T = unknown>(payload: unknown): T[] => {
+  if (!payload) return [];
+
+  if (Array.isArray(payload)) {
+    return payload as T[];
+  }
+
+  const candidate = payload as {
+    data?: unknown;
+    items?: unknown;
+    total?: unknown;
+  };
+
+  if (Array.isArray(candidate.data)) {
+    return candidate.data as T[];
+  }
+
+  if (Array.isArray(candidate.items)) {
+    return candidate.items as T[];
+  }
+
+  const nested = (candidate.data as { data?: unknown } | undefined)?.data;
+  if (Array.isArray(nested)) {
+    return nested as T[];
+  }
+
+  return [];
+};
+
+const normalizeParams = (params: Record<string, unknown> = {}) =>
+  Object.fromEntries(
+    Object.entries(params)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .map(([key, value]) => {
+        if (typeof value === 'boolean') {
+          return [key, value ? 'true' : 'false'];
+        }
+        return [key, value];
+      }),
+  );
+
 export const LeadService = {
   async create(payload: LeadDraft) {
     const { data } = await api.post('/leads', mapLeadPayload(payload));
@@ -61,16 +101,6 @@ export const LeadService = {
     const { data } = await api.get(`/leads/${id}`);
     return data as Lead;
   },
-const normalizeParams = (params: Record<string, unknown> = {}) => {
-  return Object.fromEntries(
-    Object.entries(params).map(([key, value]) => [
-      key,
-      typeof value === 'boolean' ? String(value) : value,
-    ]),
-  );
-};
-
-export const LeadService = {
   async listMine(userId: number, params: Record<string, unknown> = {}) {
     const { data } = await api.get(`/leads/mine/by-user/${userId}`, {
       params: normalizeParams(params),

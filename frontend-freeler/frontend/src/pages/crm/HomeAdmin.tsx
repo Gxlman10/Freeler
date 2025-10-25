@@ -3,7 +3,7 @@ import { KPI } from '@/components/common/KPI';
 import { Card, CardContent } from '@/components/ui/Card';
 import { CampaignService } from '@/services/campaign.service';
 import { UserService } from '@/services/user.service';
-import { LeadService } from '@/services/lead.service';
+import { LeadService, unwrapLeadCollection } from '@/services/lead.service';
 
 export const HomeAdmin = () => {
   const { data: campaigns } = useQuery({
@@ -23,7 +23,7 @@ export const HomeAdmin = () => {
 
   const totalCampanas = Array.isArray(campaigns?.data) ? campaigns.data.length : 0;
   const totalEmpresas = Array.isArray(empresas?.data) ? empresas.data.length : 0;
-  const totalLeads = Array.isArray(leads?.data) ? leads.data.length : 0;
+  const totalLeads = unwrapLeadCollection(leads).length;
 
   return (
     <div className="space-y-6">

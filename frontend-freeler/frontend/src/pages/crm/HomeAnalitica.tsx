@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LeadService, Lead } from '@/services/lead.service';
+import { LeadService, Lead, unwrapLeadCollection } from '@/services/lead.service';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MiniChart } from '@/components/common/MiniChart';
 import { KPI } from '@/components/common/KPI';
@@ -20,7 +20,7 @@ export const HomeAnalitica = () => {
     queryFn: () => LeadService.listAssignedToMe(),
   });
 
-  const leads: Lead[] = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+  const leads: Lead[] = unwrapLeadCollection<Lead>(data);
 
   const { byEstado, byCiudad } = useMemo(() => {
     return {

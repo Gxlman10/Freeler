@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LeadService, Lead, LeadDraft } from '@/services/lead.service';
+import { LeadService, Lead, LeadDraft, unwrapLeadCollection } from '@/services/lead.service';
 import { UserService } from '@/services/user.service';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
@@ -105,13 +105,7 @@ const resolveAssignee = (lead: any): { assignee: LeadAssignee | null; assignedAt
 };
 
 const extractStatusOptions = (raw: any): BulkStatusOption[] => {
-  const source = Array.isArray(raw?.data)
-    ? raw.data
-    : Array.isArray(raw?.items)
-    ? raw.items
-    : Array.isArray(raw)
-    ? raw
-    : [];
+  const source = unwrapLeadCollection(raw);
 
   const mapped = source
     .map((item: any) => ({
@@ -124,7 +118,7 @@ const extractStatusOptions = (raw: any): BulkStatusOption[] => {
 };
 
 const extractVendorOptions = (raw: any): BulkVendorOption[] => {
-  const source = Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
+  const source = unwrapLeadCollection(raw);
   return source
     .filter((user: any) => mapBackendRole(user.rol?.nombre) === Role.VENDEDOR)
     .map((user: any) => ({
@@ -134,13 +128,7 @@ const extractVendorOptions = (raw: any): BulkVendorOption[] => {
     .filter((option) => option.id);
 };
 
-const normalizeLeads = (raw: any): Lead[] => {
-  if (!raw) return [];
-  if (Array.isArray(raw?.data)) return raw.data as Lead[];
-  if (Array.isArray(raw?.items)) return raw.items as Lead[];
-  if (Array.isArray(raw)) return raw as Lead[];
-  return [];
-};
+const normalizeLeads = (raw: any): Lead[] => unwrapLeadCollection<Lead>(raw);
 
 export const LeadsAdmin = () => {
   const { push } = useToast();

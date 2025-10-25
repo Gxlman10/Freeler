@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lead, LeadService } from '@/services/lead.service';
+import { Lead, LeadService, unwrapLeadCollection } from '@/services/lead.service';
 import { useAuth } from '@/store/auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -11,11 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { LeadFormModal } from '@/components/common/LeadFormModal';
 import { getStatusBadgeVariant, normalizeStatusLabel } from '@/utils/badges';
 
-const mapResponse = (data: unknown): Lead[] => {
-  if (Array.isArray((data as any)?.data)) return (data as any).data as Lead[];
-  if (Array.isArray(data)) return data as Lead[];
-  return [];
-};
+const mapResponse = (data: unknown): Lead[] => unwrapLeadCollection<Lead>(data);
 
 export const MisReferidos = () => {
   const { user } = useAuth();

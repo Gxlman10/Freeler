@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lead, LeadService } from '@/services/lead.service';
+import { Lead, LeadService, unwrapLeadCollection } from '@/services/lead.service';
 import { useToast } from '@/components/common/Toasts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
@@ -47,13 +47,7 @@ const getInitials = (value?: string | null) => {
 };
 
 const extractStatusOptions = (raw: any): BulkStatusOption[] => {
-  const source = Array.isArray(raw?.data)
-    ? raw.data
-    : Array.isArray(raw?.items)
-    ? raw.items
-    : Array.isArray(raw)
-    ? raw
-    : [];
+  const source = unwrapLeadCollection(raw);
 
   const mapped = source
     .map((item: any) => ({
@@ -65,13 +59,7 @@ const extractStatusOptions = (raw: any): BulkStatusOption[] => {
   return mapped.length ? mapped : FALLBACK_STATUSES;
 };
 
-const normalizeLeads = (raw: any): Lead[] => {
-  if (!raw) return [];
-  if (Array.isArray(raw?.data)) return raw.data as Lead[];
-  if (Array.isArray(raw?.items)) return raw.items as Lead[];
-  if (Array.isArray(raw)) return raw as Lead[];
-  return [];
-};
+const normalizeLeads = (raw: any): Lead[] => unwrapLeadCollection<Lead>(raw);
 
 const resolveStatusIdByName = (statuses: BulkStatusOption[], name: string) => {
   const match = statuses.find(
@@ -110,8 +98,7 @@ export const LeadsVendedor = () => {
     queryKey: ['crm-leads-assigned'],
     queryFn: async () => {
       const response = await LeadService.listAssignedToMe();
-      const payload = Array.isArray(response?.data) ? response.data : response;
-      return normalizeLeads(payload);
+      return normalizeLeads(response);
     },
   });
 

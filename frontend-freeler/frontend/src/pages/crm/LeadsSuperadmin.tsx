@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { LeadService } from '@/services/lead.service';
+import { LeadService, unwrapLeadCollection } from '@/services/lead.service';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { formatDate } from '@/utils/helpers';
 import { Badge } from '@/components/ui/Badge';
@@ -11,7 +11,7 @@ export const LeadsSupervisor = () => {
     queryFn: () => LeadService.listAll({ limit: 50 }),
   });
 
-  const leads = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+  const leads = unwrapLeadCollection(data);
 
   return (
     <section className="space-y-6">

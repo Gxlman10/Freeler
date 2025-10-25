@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { LeadService } from '@/services/lead.service';
+import { LeadService, unwrapLeadCollection } from '@/services/lead.service';
 import { KPI } from '@/components/common/KPI';
 import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -20,7 +20,7 @@ export const HomeVendedor = () => {
     );
   }
 
-  const leads = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+  const leads = unwrapLeadCollection(data);
   const activos = leads.filter((lead) => lead.estado?.nombre !== 'Ganado' && lead.estado?.nombre !== 'Perdido').length;
   const ganados = leads.filter((lead) => lead.estado?.nombre === 'Ganado').length;
 
