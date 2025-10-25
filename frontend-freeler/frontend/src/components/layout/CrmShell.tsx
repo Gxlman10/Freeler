@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3,
   Building2,
-  Edit3,
   Kanban,
   LayoutDashboard,
   LogOut,
@@ -414,15 +413,6 @@ export const CrmShell = () => {
                     <p className="text-sm font-semibold text-content">{companyName}</p>
                     <p className="text-xs text-content-muted">{companySecondary}</p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-8 gap-1 px-2 text-xs font-semibold text-content-muted hover:bg-surface-muted"
-                    onClick={() => setCompanyDialogOpen(true)}
-                    leftIcon={<Edit3 className="h-3.5 w-3.5" />}
-                  >
-                    Editar
-                  </Button>
                 </div>
                 {company?.direccion && (
                   <p className="mt-3 text-xs text-content-subtle">

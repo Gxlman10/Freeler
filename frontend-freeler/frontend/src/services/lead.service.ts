@@ -1,6 +1,4 @@
 import { api } from './api';
-import { STORAGE_KEYS } from '@/utils/constants';
-import { safeJsonParse } from '@/utils/helpers';
 
 export type LeadDraft = {
   nombres?: string;
@@ -14,17 +12,21 @@ export type LeadDraft = {
   origen?: string;
   id_campania?: number;
   id_usuario_freeler?: number;
+  estado_completo?: boolean;
+  id_estado_lead?: number | null;
 };
 
 export type Lead = LeadDraft & {
   id_lead: number;
   id_usuario_freeler?: number | null;
   id_estado_lead?: number | null;
-  estado_completo?: boolean;
   fecha_creacion?: string;
   campania?: {
     id_campania: number;
     nombre: string;
+    empresa?: {
+      razon_social?: string | null;
+    } | null;
   } | null;
   estado?: {
     id_estado_lead: number;
@@ -32,48 +34,81 @@ export type Lead = LeadDraft & {
   } | null;
 };
 
-const DRAFT_KEY = STORAGE_KEYS.leadDraft;
+const mapLeadPayload = (payload: Partial<LeadDraft>) => {
+  const { id_usuario_freeler, ...rest } = payload;
+  return {
+    ...rest,
+    ...(typeof id_usuario_freeler === 'number'
+      ? { usuarioFreelerId: id_usuario_freeler }
+      : {}),
+  };
+};
 
 export const LeadService = {
-  saveDraft(draft: LeadDraft) {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  },
-  getDraft(): LeadDraft | null {
-    return safeJsonParse<LeadDraft>(localStorage.getItem(DRAFT_KEY));
-  },
-  clearDraft() {
-    localStorage.removeItem(DRAFT_KEY);
-  },
   async create(payload: LeadDraft) {
-    const { data } = await api.post('/leads', payload);
+    const { data } = await api.post('/leads', mapLeadPayload(payload));
     return data as Lead;
   },
   async createDraft(payload: LeadDraft) {
-    const { data } = await api.post('/leads/draft', payload);
+    const { data } = await api.post('/leads/draft', mapLeadPayload(payload));
     return data as Lead;
   },
+  async update(id: number, payload: Partial<LeadDraft>) {
+    const { data } = await api.patch(`/leads/${id}`, mapLeadPayload(payload));
+    return data as Lead;
+  },
+  async findById(id: number) {
+    const { data } = await api.get(`/leads/${id}`);
+    return data as Lead;
+  },
+const normalizeParams = (params: Record<string, unknown> = {}) => {
+  return Object.fromEntries(
+    Object.entries(params).map(([key, value]) => [
+      key,
+      typeof value === 'boolean' ? String(value) : value,
+    ]),
+  );
+};
+
+export const LeadService = {
   async listMine(userId: number, params: Record<string, unknown> = {}) {
-    const { data } = await api.get(`/leads/mine/by-user/${userId}`, { params });
+    const { data } = await api.get(`/leads/mine/by-user/${userId}`, {
+      params: normalizeParams(params),
+    });
     return data;
   },
   async listAssignedToMe(params: Record<string, unknown> = {}) {
-    const { data } = await api.get('/leads/assigned-to-me', { params });
+    const { data } = await api.get('/leads/assigned-to-me', {
+      params: normalizeParams(params),
+    });
     return data;
   },
   async listAll(params: Record<string, unknown> = {}) {
-    const { data } = await api.get('/leads', { params });
+    const { data } = await api.get('/leads', { params: normalizeParams(params) });
     return data;
   },
   async getStatuses() {
-    const { data } = await api.get('/leads/statuses');
+    const { data } = await api.get('/leads/catalogos/estado-lead');
     return data;
   },
-  async updateStatus(payload: { leadId: number; estadoId: number }) {
+  async updateStatus(payload: {
+    leadId: number;
+    id_estado_lead: number;
+    usuarioEmpresaId: number;
+  }) {
     const { data } = await api.post('/leads/status', payload);
     return data;
   },
-  async markAsSold(payload: { leadId: number; monto: number }) {
+  async markAsSold(payload: { leadId: number; usuarioEmpresaId: number }) {
     const { data } = await api.post('/leads/mark-sold', payload);
+    return data;
+  },
+  async updateAsignacion(id: number, payload: { usuarioEmpresaId: number; estado: 'activo' | 'inactivo' }) {
+    const { data } = await api.patch(`/leads/assignments/${id}`, payload);
+    return data;
+  },
+  async bulkUpdateAsignaciones(payload: Record<string, unknown>) {
+    const { data } = await api.patch('/leads/assignments/bulk', payload);
     return data;
   },
   async bulkUpdate(payload: {

@@ -1,6 +1,6 @@
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Loader2 } from 'lucide-react';
-import { LeadDraft, LeadService } from '@/services/lead.service';
+import { Lead, LeadDraft, LeadService } from '@/services/lead.service';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
@@ -11,67 +11,60 @@ import { queryDocument } from '@/services/document.service';
 
 type LeadFormProps = {
   campaignId?: number;
-  onSubmitted?: (leadId: number) => void;
+  lead?: Lead | null;
+  onSubmitted?: (leadId: number, status: 'draft' | 'sent') => void;
 };
 
 const ORIGIN_VALUE = 'Freeler';
 
-const initialDraft: LeadDraft = {
-  nombres: '',
-  apellidos: '',
-  dni: '',
-  email: '',
-  telefono: '',
-  ciudad: '',
-  ocupacion: '',
-  descripcion: '',
-  origen: ORIGIN_VALUE,
+const sanitizePhone = (value?: string | null) =>
+  value ? value.replace(/\D/g, '').replace(/^51/, '').slice(0, 9) : '';
+
+const buildInitialDraft = (params: {
+  campaignId?: number;
+  lead?: Lead | null;
+  userId?: number;
+  isFreeler: boolean;
+}): LeadDraft => {
+  const { campaignId, lead, userId, isFreeler } = params;
+  return {
+    nombres: lead?.nombres ?? '',
+    apellidos: lead?.apellidos ?? '',
+    dni: lead?.dni ?? '',
+    email: lead?.email ?? '',
+    telefono: sanitizePhone(lead?.telefono),
+    ciudad: lead?.ciudad ?? '',
+    ocupacion: lead?.ocupacion ?? '',
+    descripcion: lead?.descripcion ?? '',
+    origen: lead?.origen ?? ORIGIN_VALUE,
+    id_campania: lead?.id_campania ?? campaignId,
+    id_usuario_freeler: lead?.id_usuario_freeler ?? (isFreeler ? userId : undefined),
+    estado_completo: lead?.estado_completo ?? false,
+  };
 };
 
-export const LeadForm = ({ campaignId, onSubmitted }: LeadFormProps) => {
+export const LeadForm = ({ campaignId, lead = null, onSubmitted }: LeadFormProps) => {
   const { user } = useAuth();
   const { push } = useToast();
-  const [form, setForm] = useState<LeadDraft>(() => ({
-    ...initialDraft,
-    id_campania: campaignId,
-    id_usuario_freeler: user?.type === 'freeler' ? user.id : undefined,
-  }));
+  const isFreeler = user?.type === 'freeler';
+  const userId = user?.id;
+  const [form, setForm] = useState<LeadDraft>(() =>
+    buildInitialDraft({ campaignId, lead, userId, isFreeler }),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [dniStatus, setDniStatus] = useState<'idle' | 'loading' | 'success' | 'not-found'>('idle');
   const lastLookupRef = useRef<string>('');
+  const isEditing = Boolean(lead);
 
   useEffect(() => {
-    const draft = LeadService.getDraft();
-    if (draft) {
-      setForm((prev) => ({
-        ...initialDraft,
-        ...prev,
-        ...draft,
-        origen: draft.origen ?? ORIGIN_VALUE,
-        id_campania: draft.id_campania ?? campaignId ?? prev.id_campania,
-        id_usuario_freeler: draft.id_usuario_freeler ?? (user?.type === 'freeler' ? user.id : prev.id_usuario_freeler),
-      }));
-      return;
-    }
-    setForm((prev) => ({
-      ...initialDraft,
-      ...prev,
-      id_campania: campaignId ?? prev.id_campania,
-      id_usuario_freeler: user?.type === 'freeler' ? user.id : prev.id_usuario_freeler,
-    }));
-  }, [campaignId, user?.id, user?.type]);
-
-  useEffect(() => {
-    LeadService.saveDraft({
-      ...form,
-      origen: ORIGIN_VALUE,
-      id_campania: form.id_campania ?? campaignId,
-      id_usuario_freeler:
-        form.id_usuario_freeler ?? (user?.type === 'freeler' ? user.id : undefined),
-    });
-  }, [form, campaignId, user?.id, user?.type]);
+    setForm(buildInitialDraft({ campaignId, lead, userId, isFreeler }));
+    setErrors({});
+    setFeedback(null);
+    setDniStatus('idle');
+  }, [campaignId, lead, userId, isFreeler]);
 
   useEffect(() => {
     const value = (form.dni ?? '').trim();
@@ -89,13 +82,17 @@ export const LeadForm = ({ campaignId, onSubmitted }: LeadFormProps) => {
       .then((data) => {
         if (cancelled) return;
         if (data && 'names' in data) {
-          setForm((prev) => ({
-            ...prev,
-            nombres: data.names ?? prev.nombres,
-            apellidos:
+          setForm((prev) => {
+            const surnames =
               data.surnames ??
-              [data.paternalLastName, data.maternalLastName].filter(Boolean).join(' ') || prev.apellidos,
-          }));
+              [data.paternalLastName, data.maternalLastName].filter(Boolean).join(' ');
+
+            return {
+              ...prev,
+              nombres: data.names ?? prev.nombres,
+              apellidos: (surnames && surnames.trim()) ? surnames : prev.apellidos,
+            };
+          });
           setDniStatus('success');
         } else {
           setDniStatus('not-found');
@@ -138,31 +135,89 @@ export const LeadForm = ({ campaignId, onSubmitted }: LeadFormProps) => {
       clearError(field as string);
     };
 
-  const handleSaveDraft = () => {
-    LeadService.saveDraft({
-      ...form,
+  const ensureFreelerSession = () => {
+    if (!isFreeler || !userId) {
+      push({
+        title: 'Sesin requerida',
+        description: 'Debes iniciar sesin como freeler para registrar referidos.',
+        variant: 'danger',
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const buildPayload = (overrides: Partial<LeadDraft> = {}): LeadDraft => {
+    const digits = (form.telefono ?? '').replace(/\D/g, '').slice(0, 9);
+    const formattedPhone = digits ? `+51${digits}` : undefined;
+    return {
+      nombres: form.nombres?.trim() || undefined,
+      apellidos: form.apellidos?.trim() || undefined,
+      dni: form.dni?.trim() || undefined,
+      email: form.email?.trim() || undefined,
+      telefono: formattedPhone,
+      ciudad: form.ciudad?.trim() || undefined,
+      ocupacion: form.ocupacion?.trim() || undefined,
+      descripcion: form.descripcion?.trim() || undefined,
       origen: ORIGIN_VALUE,
       id_campania: form.id_campania ?? campaignId,
       id_usuario_freeler:
-        form.id_usuario_freeler ?? (user?.type === 'freeler' ? user.id : undefined),
-    });
-    setFeedback('Borrador guardado localmente.');
+        form.id_usuario_freeler ?? (isFreeler && userId ? userId : undefined),
+      estado_completo: overrides.estado_completo ?? form.estado_completo,
+      ...overrides,
+    };
+  };
+
+  const draftValidationErrors = useMemo(() => {
+    const next: Record<string, string> = {};
+    if (form.email && !isValidEmail(form.email)) next.email = 'Ingresa un correo valido.';
+    const digits = (form.telefono ?? '').replace(/\D/g, '');
+    if (digits && digits.length !== 9) next.telefono = 'Ingresa 9 dgitos o deja vaco.';
+    if (form.dni && form.dni.length !== 8) next.dni = 'El DNI debe tener 8 dgitos.';
+    return next;
+  }, [form.email, form.telefono, form.dni]);
+
+  const handleSaveDraft = async () => {
+    if (!ensureFreelerSession()) return;
+    setIsSavingDraft(true);
+    setFeedback(null);
+
+    try {
+      const payload = buildPayload({ estado_completo: false });
+      const response = isEditing
+        ? await LeadService.update(lead!.id_lead, payload)
+        : await LeadService.createDraft(payload);
+      push({
+        title: 'Borrador guardado',
+        description: 'Tus datos quedaron registrados en la plataforma.',
+      });
+      onSubmitted?.(response.id_lead, 'draft');
+    } catch (error) {
+      push({
+        title: 'No pudimos guardar el borrador',
+        description: 'Intenta nuevamente en unos segundos.',
+        variant: 'danger',
+      });
+    } finally {
+      setIsSavingDraft(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!ensureFreelerSession()) return;
     setIsSubmitting(true);
     setFeedback(null);
 
     const nextErrors: Record<string, string> = {};
-    if (!isValidDni(form.dni ?? '')) nextErrors.dni = 'Ingresa un DNI valido (8 digitos).';
+    if (!isValidDni(form.dni ?? '')) nextErrors.dni = 'Ingresa un DNI valido (8 dgitos).';
     if (!form.nombres?.trim()) nextErrors.nombres = 'Ingresa el nombre del referido.';
     if (!form.apellidos?.trim()) nextErrors.apellidos = 'Ingresa los apellidos del referido.';
     const phoneDigits = (form.telefono ?? '').replace(/\D/g, '');
-    if (phoneDigits.length !== 9) nextErrors.telefono = 'Ingresa un numero valido (9 digitos).';
+    if (phoneDigits.length !== 9) nextErrors.telefono = 'Ingresa un nmero valido (9 dgitos).';
     if (form.email && !isValidEmail(form.email)) nextErrors.email = 'Ingresa un correo valido.';
     if (!form.ciudad?.trim()) nextErrors.ciudad = 'Ingresa la ciudad.';
-    if (!form.ocupacion?.trim()) nextErrors.ocupacion = 'Ingresa la ocupacion.';
+    if (!form.ocupacion?.trim()) nextErrors.ocupacion = 'Ingresa la ocupacin.';
     if (!form.descripcion?.trim()) nextErrors.descripcion = 'Describe brevemente el referido.';
 
     if (Object.keys(nextErrors).length > 0) {
@@ -172,33 +227,27 @@ export const LeadForm = ({ campaignId, onSubmitted }: LeadFormProps) => {
     }
 
     try {
-      const digits = (form.telefono ?? '').replace(/\D/g, '');
-      const formattedPhone = digits ? `+51${digits}` : undefined;
-      const payload: LeadDraft = {
-        nombres: form.nombres?.trim(),
-        apellidos: form.apellidos?.trim(),
-        dni: form.dni?.trim(),
-        email: form.email?.trim() || undefined,
-        telefono: formattedPhone,
-        ciudad: form.ciudad?.trim() || undefined,
-        ocupacion: form.ocupacion?.trim() || undefined,
-        descripcion: form.descripcion?.trim() || undefined,
-        origen: ORIGIN_VALUE,
-        id_campania: form.id_campania ?? campaignId,
-        id_usuario_freeler: user?.type === 'freeler' ? user.id : undefined,
-      };
+      const payload = buildPayload({ estado_completo: true });
+      const response = isEditing
+        ? await LeadService.update(lead!.id_lead, payload)
+        : await LeadService.create(payload);
 
-      const lead = await LeadService.create(payload);
-      LeadService.clearDraft();
-      setForm({ ...initialDraft, id_campania: campaignId });
-      setDniStatus('idle');
       setErrors({});
-      setFeedback(`Lead enviado con exito${lead?.id_lead ? ` (ID ${lead.id_lead})` : ''}.`);
-      push({ title: 'Referido registrado', description: 'Compartimos los datos con el equipo de campanas.' });
-      onSubmitted?.(lead?.id_lead ?? 0);
+      setFeedback(
+        `Lead enviado con exito${response?.id_lead ? ` (ID ${response.id_lead})` : ''}.`,
+      );
+      push({
+        title: 'Referido registrado',
+        description: 'Compartimos los datos con el equipo de campaas.',
+      });
+      onSubmitted?.(response.id_lead, 'sent');
     } catch (error) {
       setFeedback('Ocurrio un problema al enviar el lead. Intenta nuevamente.');
-      push({ title: 'No pudimos registrar el referido', description: 'Intenta nuevamente.', variant: 'danger' });
+      push({
+        title: 'No pudimos registrar el referido',
+        description: 'Revisa los datos e intenta nuevamente.',
+        variant: 'danger',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -222,7 +271,7 @@ export const LeadForm = ({ campaignId, onSubmitted }: LeadFormProps) => {
           }
           isValid={dniStatus === 'success'}
           helperText={dniStatus === 'not-found' ? 'No encontramos datos para este DNI.' : undefined}
-          error={errors.dni}
+          error={errors.dni ?? draftValidationErrors.dni}
           onChange={handleChange('dni')}
         />
         <Input
@@ -246,14 +295,14 @@ export const LeadForm = ({ campaignId, onSubmitted }: LeadFormProps) => {
           inputMode="tel"
           leadingElement={<span className="text-xs font-semibold text-content-muted">+51</span>}
           helperText="Ingresa solo numeros, sin espacios."
-          error={errors.telefono}
+          error={errors.telefono ?? draftValidationErrors.telefono}
           onChange={handleChange('telefono')}
         />
         <Input
           label="Correo"
           type="email"
           value={form.email ?? ''}
-          error={errors.email}
+          error={errors.email ?? draftValidationErrors.email}
           onChange={handleChange('email')}
         />
         <Input
@@ -279,11 +328,11 @@ export const LeadForm = ({ campaignId, onSubmitted }: LeadFormProps) => {
         error={errors.descripcion}
         onChange={handleChange('descripcion')}
       />
-      <div className="flex gap-2">
-        <Button type="button" variant="secondary" onClick={handleSaveDraft}>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="secondary" onClick={handleSaveDraft} isLoading={isSavingDraft}>
           Guardar borrador
         </Button>
-        <Button type="submit" isLoading={isSubmitting}>
+        <Button type="submit" isLoading={isSubmitting} disabled={isSavingDraft}>
           Enviar
         </Button>
       </div>

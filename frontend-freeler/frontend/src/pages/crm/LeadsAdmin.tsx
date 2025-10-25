@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LeadService, Lead } from '@/services/lead.service';
+import { LeadService, Lead, LeadDraft } from '@/services/lead.service';
 import { UserService } from '@/services/user.service';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Dialog } from '@/components/ui/Dialog';
+import { Textarea } from '@/components/ui/Textarea';
 import { Alert } from '@/components/common/Alert';
 import LeadBulkActionsBar, {
   BulkStatusOption,
@@ -153,6 +154,12 @@ export const LeadsAdmin = () => {
   const [isMetaDialogOpen, setMetaDialogOpen] = useState(false);
   const [isImportDialogOpen, setImportDialogOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
+  const [isEditDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [editLeadState, setEditLeadState] = useState<{ estadoId: string; descripcion: string }>({
+    estadoId: '',
+    descripcion: '',
+  });
 
   const leadsQuery = useQuery({
     queryKey: ['crm-admin-leads'],
@@ -254,6 +261,31 @@ export const LeadsAdmin = () => {
     },
   });
 
+  const editLeadMutation = useMutation({
+    mutationFn: async (payload: { estadoId: string; descripcion: string }) => {
+      if (!editingLead) {
+        throw new Error('NO_LEAD_SELECTED');
+      }
+      const body: Partial<LeadDraft> & { id_estado_lead?: number | null } = {};
+      body.descripcion = payload.descripcion.trim() || undefined;
+      body.id_estado_lead = payload.estadoId ? Number(payload.estadoId) : null;
+      return LeadService.update(editingLead.id_lead, body);
+    },
+    onSuccess: () => {
+      push({ title: 'Lead actualizado', description: 'Los cambios se guardaron correctamente.' });
+      setEditDialogOpen(false);
+      setEditingLead(null);
+      queryClient.invalidateQueries({ queryKey: ['crm-admin-leads'] });
+    },
+    onError: () => {
+      push({
+        title: 'No se pudo actualizar el lead',
+        description: 'Revisa los datos e intenta nuevamente.',
+        variant: 'danger',
+      });
+    },
+  });
+
   const handleActionChange = (action: LeadBulkAction) => {
     setSelectedAction(action);
     if (action !== 'assign') {
@@ -273,6 +305,23 @@ export const LeadsAdmin = () => {
     if (selectedAction === 'assign') payload.vendedorId = selectedVendorId ?? undefined;
     if (selectedAction === 'change-status') payload.estadoId = selectedStatusId ?? undefined;
     bulkMutation.mutate(payload);
+  };
+
+  const openEditLeadDialog = (lead: Lead) => {
+    setEditingLead(lead);
+    setEditLeadState({
+      estadoId: lead.estado?.id_estado_lead ? String(lead.estado.id_estado_lead) : '',
+      descripcion: lead.descripcion ?? '',
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditLeadSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    editLeadMutation.mutate({
+      estadoId: editLeadState.estadoId,
+      descripcion: editLeadState.descripcion,
+    });
   };
 
   return (
@@ -363,6 +412,7 @@ export const LeadsAdmin = () => {
               <TableHead>Origen</TableHead>
               <TableHead>Creado</TableHead>
               <TableHead>Tiempo sin asignar</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -427,6 +477,11 @@ export const LeadsAdmin = () => {
                   <TableCell>{lead.origen ?? 'No indicado'}</TableCell>
                   <TableCell>{formatDate(lead.fecha_creacion)}</TableCell>
                   <TableCell className="text-sm text-content-muted">{unassignedDuration}</TableCell>
+                  <TableCell className="text-right">
+                    <Button size="sm" variant="outline" onClick={() => openEditLeadDialog(lead)}>
+                      Editar
+                    </Button>
+                  </TableCell>
                 </TableRow>
               );
             })}
@@ -450,6 +505,54 @@ export const LeadsAdmin = () => {
         onConfirm={handleBulkConfirm}
         disabled={bulkMutation.isPending}
       />
+
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setEditingLead(null);
+            setEditLeadState({ estadoId: '', descripcion: '' });
+          }
+        }}
+        title="Editar lead"
+        description="Actualiza la informacion del lead seleccionado."
+      >
+        {editingLead ? (
+          <form className="space-y-3" onSubmit={handleEditLeadSubmit}>
+            <Select
+              label="Estado"
+              value={editLeadState.estadoId}
+              onChange={(event) =>
+                setEditLeadState((prev) => ({ ...prev, estadoId: event.target.value }))
+              }
+              options={[
+                { label: 'No asignado', value: '' },
+                ...statusOptions.map((status) => ({
+                  value: String(status.id),
+                  label: status.label,
+                })),
+              ]}
+            />
+            <Textarea
+              label="Descripcion"
+              minRows={4}
+              value={editLeadState.descripcion}
+              onChange={(event) =>
+                setEditLeadState((prev) => ({ ...prev, descripcion: event.target.value }))
+              }
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" isLoading={editLeadMutation.isLoading}>
+                Guardar cambios
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </Dialog>
 
       <Dialog
         open={isMetaDialogOpen}

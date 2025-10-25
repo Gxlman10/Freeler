@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
@@ -11,9 +11,11 @@ import { Dialog } from '@/components/ui/Dialog';
 import { LeadFormModal } from '@/components/common/LeadFormModal';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/store/auth';
 import { useToast } from '@/components/common/Toasts';
 import { APP_ROUTES } from '@/utils/constants';
+import { formatCurrency, formatDate } from '@/utils/helpers';
 
 type Filters = {
   search?: string;
@@ -34,6 +36,7 @@ export const Home = () => {
   const [filters, setFilters] = useState<Filters>({});
   const [selectedChip, setSelectedChip] = useState('all');
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
 
   const queryFilters = useMemo(
@@ -61,6 +64,18 @@ export const Home = () => {
     setFilters((prev) => ({ ...prev, estado: chip?.estado }));
   };
 
+  const campaignDetailQuery = useQuery({
+    queryKey: ['campaign-detail', selectedCampaignId],
+    queryFn: () => CampaignService.getById(selectedCampaignId ?? 0),
+    enabled: selectedCampaignId !== null,
+  });
+
+  useEffect(() => {
+    if (campaignDetailQuery.data) {
+      setSelectedCampaign(campaignDetailQuery.data as Campaign);
+    }
+  }, [campaignDetailQuery.data]);
+
   const handleRefer = (campaign: Campaign) => {
     if (!user || user.type !== 'freeler') {
       push({
@@ -73,6 +88,11 @@ export const Home = () => {
     }
     setSelectedCampaign(campaign);
     setLeadModalOpen(true);
+  };
+
+  const handleOpenDetails = (campaign: Campaign) => {
+    setSelectedCampaign(campaign);
+    setSelectedCampaignId(campaign.id_campania);
   };
 
   return (
@@ -127,27 +147,35 @@ export const Home = () => {
         />
       ) : (
         <CampaignGrid>
-          {campaigns.map((campaign) => (
-            <CampaignCard
-              key={campaign.id_campania}
-              name={campaign.nombre}
-              commission={typeof campaign.comision === 'string' ? Number(campaign.comision) : campaign.comision}
-              company={campaign.empresa?.razon_social ?? undefined}
-              location={campaign.ubicacion ?? undefined}
-              startDate={campaign.fecha_inicio}
-              endDate={campaign.fecha_fin}
-              onOpen={() => setSelectedCampaign(campaign)}
-              onRefer={() => handleRefer(campaign)}
-              disabledRefer={!user || user.type !== 'freeler'}
-            />
-          ))}
+          {campaigns.map((campaign) => {
+            const commissionValue =
+              typeof campaign.comision === 'string' ? Number(campaign.comision) : campaign.comision;
+            return (
+              <CampaignCard
+                key={campaign.id_campania}
+                name={campaign.nombre}
+                commission={commissionValue}
+                company={campaign.empresa?.razon_social ?? undefined}
+                location={campaign.ubicacion ?? undefined}
+                startDate={campaign.fecha_inicio}
+                endDate={campaign.fecha_fin}
+                referidosCount={campaign.totalReferidos}
+                onOpen={() => handleOpenDetails(campaign)}
+                onRefer={() => handleRefer(campaign)}
+                disabledRefer={!user || user.type !== 'freeler'}
+              />
+            );
+          })}
         </CampaignGrid>
       )}
 
       <Dialog
         open={Boolean(selectedCampaign)}
         onOpenChange={(open) => {
-          if (!open) setSelectedCampaign(null);
+          if (!open) {
+            setSelectedCampaign(null);
+            setSelectedCampaignId(null);
+          }
         }}
         title={selectedCampaign?.nombre}
         description={selectedCampaign?.descripcion ?? 'Esta campana no tiene descripcion.'}
@@ -161,13 +189,46 @@ export const Home = () => {
             </div>
           ) : undefined
         }
-      />
+      >
+        {selectedCampaign ? (
+          <div className="space-y-3 text-sm text-content">
+            <div>
+              <p className="text-xs uppercase text-content-muted">Empresa</p>
+              <p className="font-medium">{selectedCampaign.empresa?.razon_social ?? 'Sin empresa asociada'}</p>
+              {selectedCampaign.empresa?.ruc && (
+                <p className="text-xs text-content-subtle">RUC {selectedCampaign.empresa.ruc}</p>
+              )}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase text-content-muted">Vigencia</p>
+                <p className="font-medium">
+                  {formatDate(selectedCampaign.fecha_inicio)} - {formatDate(selectedCampaign.fecha_fin)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-content-muted">Ubicacion</p>
+                <p className="font-medium">{selectedCampaign.ubicacion ?? 'No especificada'}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs uppercase text-content-muted">Comision estimada</p>
+              <p className="text-lg font-semibold">{formatCurrency(Number(selectedCampaign.comision) || 0)}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase text-content-muted">Referidos totales</p>
+              <Badge variant="outline">{selectedCampaign.totalReferidos ?? 0}</Badge>
+            </div>
+          </div>
+        ) : null}
+      </Dialog>
 
       <LeadFormModal
         open={leadModalOpen}
         onClose={() => {
           setLeadModalOpen(false);
           setSelectedCampaign(null);
+          setSelectedCampaignId(null);
         }}
         campaignId={selectedCampaign?.id_campania}
       />

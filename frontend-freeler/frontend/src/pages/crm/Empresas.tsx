@@ -29,7 +29,10 @@ export const Empresas = () => {
   const queryClient = useQueryClient();
   const { push } = useToast();
   const [isDialogOpen, setDialogOpen] = useState(false);
+  const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [form, setForm] = useState<EmpresaForm>(() => buildInitialForm());
+  const [editForm, setEditForm] = useState<EmpresaForm>(() => buildInitialForm());
+  const [editingEmpresa, setEditingEmpresa] = useState<Empresa | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['crm-empresas'],
@@ -55,6 +58,31 @@ export const Empresas = () => {
     },
   });
 
+  const updateEmpresa = useMutation({
+    mutationFn: (payload: EmpresaForm) => {
+      if (!editingEmpresa) {
+        throw new Error('NO_EMPRESA_SELECTED');
+      }
+      return UserService.updateEmpresa(editingEmpresa.id_empresa, payload);
+    },
+    onSuccess: (updated) => {
+      push({
+        title: 'Empresa actualizada',
+        description: updated.razon_social ?? 'Datos guardados correctamente.',
+      });
+      setEditDialogOpen(false);
+      setEditingEmpresa(null);
+      queryClient.invalidateQueries({ queryKey: ['crm-empresas'] });
+    },
+    onError: () => {
+      push({
+        title: 'No se pudo actualizar',
+        description: 'Intenta nuevamente.',
+        variant: 'danger',
+      });
+    },
+  });
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!form.razon_social.trim()) {
@@ -62,6 +90,31 @@ export const Empresas = () => {
       return;
     }
     createEmpresa.mutate();
+  };
+
+  const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editForm.razon_social.trim()) {
+      push({
+        title: 'Campos incompletos',
+        description: 'La razon social es obligatoria.',
+        variant: 'warning',
+      });
+      return;
+    }
+    updateEmpresa.mutate(editForm);
+  };
+
+  const openEditDialog = (empresa: Empresa) => {
+    setEditingEmpresa(empresa);
+    setEditForm({
+      razon_social: empresa.razon_social ?? '',
+      ruc: empresa.ruc ?? '',
+      direccion: empresa.direccion ?? '',
+      telefono: empresa.telefono ?? '',
+      email: empresa.email ?? '',
+    });
+    setEditDialogOpen(true);
   };
 
   return (
@@ -84,6 +137,7 @@ export const Empresas = () => {
               <TableHead>RUC</TableHead>
               <TableHead>Correo</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -97,11 +151,16 @@ export const Empresas = () => {
                     {normalizeStatusLabel(empresa.estado, 'Sin estado')}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-right">
+                  <Button size="sm" variant="outline" onClick={() => openEditDialog(empresa)}>
+                    Editar
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {!empresas.length && (
               <TableRow>
-                <TableCell colSpan={4}>Aun no hay empresas registradas.</TableCell>
+                <TableCell colSpan={5}>Aun no hay empresas registradas.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -139,6 +198,57 @@ export const Empresas = () => {
             </Button>
             <Button type="submit" isLoading={createEmpresa.isLoading}>
               Guardar
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setEditingEmpresa(null);
+            setEditForm(buildInitialForm());
+          }
+        }}
+        title="Editar empresa"
+        description="Actualiza los datos de la empresa seleccionada."
+      >
+        <form className="space-y-3" onSubmit={handleEditSubmit}>
+          <Input
+            label="Razon social"
+            required
+            value={editForm.razon_social}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, razon_social: event.target.value }))}
+          />
+          <Input
+            label="RUC"
+            value={editForm.ruc}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, ruc: event.target.value }))}
+          />
+          <Input
+            label="Direccion"
+            value={editForm.direccion}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, direccion: event.target.value }))}
+          />
+          <Input
+            label="Telefono"
+            value={editForm.telefono}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, telefono: event.target.value }))}
+          />
+          <Input
+            label="Correo"
+            type="email"
+            value={editForm.email}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" isLoading={updateEmpresa.isLoading}>
+              Guardar cambios
             </Button>
           </div>
         </form>

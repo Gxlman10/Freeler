@@ -21,7 +21,7 @@ import { CampanasModule } from './campanas/campanas.module';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, dbConfig, jwtConfig],
-      envFilePath: ['.env'],
+      envFilePath: ['.env.local', `.env.${process.env.NODE_ENV ?? 'development'}`, '.env'],
     }),
 
     TypeOrmModule.forRootAsync({
@@ -33,11 +33,15 @@ import { CampanasModule } from './campanas/campanas.module';
           name: string;
           user: string;
           pass: string;
+          ssl?: boolean;
         }>('database');
 
         if (!db) {
           throw new Error('Database configuration is not defined');
         }
+
+        const useSsl = Boolean(db.ssl);
+        const sslOptions = useSsl ? { rejectUnauthorized: false } : false;
 
         return {
           type: 'postgres',
@@ -51,9 +55,7 @@ import { CampanasModule } from './campanas/campanas.module';
           synchronize: false,
           schema: 'freeler',
           logging: ['error', 'query'],
-          ssl: {
-            rejectUnauthorized: false, // útil para RDS en dev
-          },
+          ssl: sslOptions,
           extra: {
             // mantiene conexiones activas más tiempo (RDS)
             connectionTimeoutMillis: 10000,

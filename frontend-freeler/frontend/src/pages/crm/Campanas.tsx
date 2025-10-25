@@ -37,7 +37,10 @@ export const Campanas = () => {
   const { push } = useToast();
   const { user } = useAuth();
   const [isDialogOpen, setDialogOpen] = useState(false);
+  const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [form, setForm] = useState<CampaignFormState>(() => buildInitialForm());
+  const [editForm, setEditForm] = useState<CampaignFormState>(() => buildInitialForm());
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
 
   const resetForm = useCallback(() => {
     setForm(buildInitialForm());
@@ -90,6 +93,31 @@ export const Campanas = () => {
     },
   });
 
+  const updateCampaign = useMutation({
+    mutationFn: (payload: Partial<CreateCampaignPayload>) => {
+      if (!editingCampaign) {
+        throw new Error('NO_CAMPAIGN_SELECTED');
+      }
+      return CampaignService.update(editingCampaign.id_campania, payload);
+    },
+    onSuccess: (updated) => {
+      push({
+        title: 'Campana actualizada',
+        description: updated.nombre ?? 'Cambios guardados correctamente.',
+      });
+      setEditDialogOpen(false);
+      setEditingCampaign(null);
+      queryClient.invalidateQueries({ queryKey: ['crm-campanas'] });
+    },
+    onError: () => {
+      push({
+        title: 'No se pudo actualizar la campana',
+        description: 'Revisa los datos e intenta nuevamente.',
+        variant: 'danger',
+      });
+    },
+  });
+
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -128,6 +156,46 @@ export const Campanas = () => {
     [createCampaign, form, push, resolveSessionIds],
   );
 
+  const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingCampaign) return;
+    const commissionValue = Number(editForm.comision);
+    if (Number.isNaN(commissionValue) || commissionValue < 0) {
+      push({
+        title: 'Monto invalido',
+        description: 'Ingresa un monto valido para la comision.',
+        variant: 'danger',
+      });
+      return;
+    }
+    updateCampaign.mutate({
+      nombre: editForm.nombre.trim(),
+      descripcion: editForm.descripcion.trim() || undefined,
+      ubicacion: editForm.ubicacion.trim() || undefined,
+      comision: commissionValue,
+      fecha_inicio: editForm.fecha_inicio,
+      fecha_fin: editForm.fecha_fin,
+      estado: editForm.estado,
+    });
+  };
+
+  const openEditDialog = (campaign: Campaign) => {
+    setEditingCampaign(campaign);
+    setEditForm({
+      nombre: campaign.nombre ?? '',
+      descripcion: campaign.descripcion ?? '',
+      ubicacion: campaign.ubicacion ?? '',
+      comision:
+        typeof campaign.comision === 'string'
+          ? campaign.comision
+          : String(campaign.comision ?? ''),
+      fecha_inicio: campaign.fecha_inicio ?? '',
+      fecha_fin: campaign.fecha_fin ?? '',
+      estado: campaign.estado ?? 1,
+    });
+    setEditDialogOpen(true);
+  };
+
   return (
     <section className="space-y-6 text-content">
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -150,6 +218,7 @@ export const Campanas = () => {
               <TableHead>Comision</TableHead>
               <TableHead>Vigencia</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -172,12 +241,17 @@ export const Campanas = () => {
                       {normalizeStatusLabel(campaign.estado, 'Sin estado')}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button size="sm" variant="outline" onClick={() => openEditDialog(campaign)}>
+                      Editar
+                    </Button>
+                  </TableCell>
                 </TableRow>
               );
             })}
             {!campaigns.length && (
               <TableRow>
-                <TableCell colSpan={4}>Aun no hay campanas registradas.</TableCell>
+                <TableCell colSpan={5}>Aun no hay campanas registradas.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -247,6 +321,70 @@ export const Campanas = () => {
             </Button>
             <Button type="submit" isLoading={createCampaign.isLoading}>
               Guardar
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setEditingCampaign(null);
+            setEditForm(buildInitialForm());
+          }
+        }}
+        title="Editar campana"
+        description="Actualiza los detalles de la campana."
+      >
+        <form className="space-y-3" onSubmit={handleEditSubmit}>
+          <Input
+            label="Nombre"
+            required
+            value={editForm.nombre}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, nombre: event.target.value }))}
+          />
+          <Textarea
+            label="Descripcion"
+            minRows={4}
+            value={editForm.descripcion}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+          />
+          <Input
+            label="Ubicacion"
+            value={editForm.ubicacion}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, ubicacion: event.target.value }))}
+          />
+          <Input
+            label="Comision por referido (S/)"
+            type="number"
+            step="0.01"
+            min="0"
+            required
+            value={editForm.comision}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, comision: event.target.value }))}
+          />
+          <Input
+            label="Fecha de inicio"
+            type="date"
+            required
+            value={editForm.fecha_inicio}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, fecha_inicio: event.target.value }))}
+          />
+          <Input
+            label="Fecha de cierre"
+            type="date"
+            required
+            value={editForm.fecha_fin}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, fecha_fin: event.target.value }))}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" isLoading={updateCampaign.isLoading}>
+              Guardar cambios
             </Button>
           </div>
         </form>

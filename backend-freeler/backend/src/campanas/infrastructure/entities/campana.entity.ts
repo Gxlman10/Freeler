@@ -2,8 +2,13 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { EmpresaEntity } from '../../../empresas/infrastructure/entities/empresa.entity';
+import { LeadEntity } from '../../../leads/infrastructure/entities/lead.entity';
 
 @Entity({ schema: 'freeler', name: 'campanias' })
 export class CampanaEntity {
@@ -40,6 +45,15 @@ export class CampanaEntity {
     default: () => 'CURRENT_TIMESTAMP',
   })
   fecha_creacion!: Date;
+
+  @ManyToOne(() => EmpresaEntity, { nullable: true })
+  @JoinColumn({ name: 'id_empresa', referencedColumnName: 'id_empresa' })
+  empresa?: EmpresaEntity | null;
+
+  @OneToMany(() => LeadEntity, (lead) => lead.campania)
+  leads?: LeadEntity[];
+
+  totalReferidos?: number;
 }
 
 export default CampanaEntity;

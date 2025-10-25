@@ -188,7 +188,16 @@ export const LeadsVendedor = () => {
     : [];
 
   const statusMutation = useMutation({
-    mutationFn: LeadService.updateStatus,
+    mutationFn: ({ leadId, estadoId }: { leadId: number; estadoId: number }) => {
+      if (!user?.id) {
+        throw new Error('NO_USER_CONTEXT');
+      }
+      return LeadService.updateStatus({
+        leadId,
+        id_estado_lead: estadoId,
+        usuarioEmpresaId: user.id,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-leads-assigned'] });
     },

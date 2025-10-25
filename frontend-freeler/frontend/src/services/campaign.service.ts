@@ -14,6 +14,7 @@ export type Campaign = {
   fecha_inicio: string;
   fecha_fin: string;
   estado: number;
+  totalReferidos?: number;
 };
 
 export type CampaignFilters = {

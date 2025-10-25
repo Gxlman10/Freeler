@@ -17,8 +17,17 @@ export class TypeormCampanaRepository implements ICampanaRepository {
   }
 
   findById(id: number) {
-    const where: FindOptionsWhere<CampanaEntity> = { id_campania: id };
-    return this.repo.findOne({ where });
+    return this.repo
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.empresa', 'empresa')
+      .loadRelationCountAndMap(
+        'c.totalReferidos',
+        'c.leads',
+        'lead',
+        (qb) => qb.where('lead.estado_completo = :estado', { estado: true }),
+      )
+      .where('c.id_campania = :id', { id })
+      .getOne();
   }
 
   async update(
@@ -45,6 +54,13 @@ export class TypeormCampanaRepository implements ICampanaRepository {
       fecha_inicio_desde,
     } = filters;
     const qb = this.repo.createQueryBuilder('c');
+    qb.leftJoinAndSelect('c.empresa', 'empresa');
+    qb.loadRelationCountAndMap(
+      'c.totalReferidos',
+      'c.leads',
+      'lead',
+      (sub) => sub.where('lead.estado_completo = :estado', { estado: true }),
+    );
 
     if (search) {
       qb.where(

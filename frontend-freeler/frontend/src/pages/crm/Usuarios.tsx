@@ -51,6 +51,9 @@ export const Usuarios = () => {
 
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<NewUserForm>(() => buildInitialForm());
+  const [isEditDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState<NewUserForm>(() => buildInitialForm());
+  const [editingUser, setEditingUser] = useState<any | null>(null);
 
   const createUser = useMutation({
     mutationFn: async () => {
@@ -97,6 +100,62 @@ export const Usuarios = () => {
     createUser.mutate();
   };
 
+  const updateUser = useMutation({
+    mutationFn: async (payload: NewUserForm) => {
+      if (!editingUser) {
+        throw new Error('NO_USER_SELECTED');
+      }
+      return UserService.updateUsuarioEmpresa(editingUser.id_usuario_empresa, {
+        nombres: payload.nombres.trim(),
+        apellidos: payload.apellidos.trim(),
+        email: payload.email.trim(),
+        id_rol: payload.roleId,
+        ...(payload.password.trim() ? { password: payload.password } : {}),
+      });
+    },
+    onSuccess: (updated) => {
+      push({
+        title: 'Usuario actualizado',
+        description: `${updated.nombres ?? ''} ${updated.apellidos ?? ''}`.trim() || 'Datos guardados.',
+      });
+      setEditDialogOpen(false);
+      setEditingUser(null);
+      queryClient.invalidateQueries({ queryKey: ['crm-usuarios-empresa'] });
+    },
+    onError: () => {
+      push({
+        title: 'No se pudo actualizar el usuario',
+        description: 'Intenta nuevamente.',
+        variant: 'danger',
+      });
+    },
+  });
+
+  const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editForm.nombres.trim() || !editForm.apellidos.trim() || !editForm.email.trim()) {
+      push({
+        title: 'Campos incompletos',
+        description: 'Completa al menos nombres, apellidos y correo.',
+        variant: 'warning',
+      });
+      return;
+    }
+    updateUser.mutate(editForm);
+  };
+
+  const openEditDialog = (usuario: any) => {
+    setEditingUser(usuario);
+    setEditForm({
+      nombres: usuario.nombres ?? '',
+      apellidos: usuario.apellidos ?? '',
+      email: usuario.email ?? '',
+      password: '',
+      roleId: usuario.rol?.id_rol ?? ROLE_OPTIONS[0].value,
+    });
+    setEditDialogOpen(true);
+  };
+
   return (
     <section className="space-y-6 text-content">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -119,6 +178,7 @@ export const Usuarios = () => {
               <TableHead>Correo</TableHead>
               <TableHead>Rol</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -138,11 +198,16 @@ export const Usuarios = () => {
                     {normalizeStatusLabel(usuario.estado, 'Sin estado')}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-right">
+                  <Button size="sm" variant="outline" onClick={() => openEditDialog(usuario)}>
+                    Editar
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {!usuarios.length && (
               <TableRow>
-                <TableCell colSpan={4}>Aun no hay usuarios registrados.</TableCell>
+                <TableCell colSpan={5}>Aun no hay usuarios registrados.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -197,6 +262,62 @@ export const Usuarios = () => {
             </Button>
             <Button type="submit" isLoading={createUser.isLoading}>
               Registrar
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setEditingUser(null);
+            setEditForm(buildInitialForm());
+          }
+        }}
+        title="Editar usuario"
+        description="Actualiza la informacion del usuario seleccionado."
+      >
+        <form className="space-y-3" onSubmit={handleEditSubmit}>
+          <Input
+            label="Nombres"
+            required
+            value={editForm.nombres}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, nombres: event.target.value }))}
+          />
+          <Input
+            label="Apellidos"
+            required
+            value={editForm.apellidos}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, apellidos: event.target.value }))}
+          />
+          <Input
+            label="Correo"
+            type="email"
+            required
+            value={editForm.email}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
+          />
+          <Input
+            label="Actualizar contrasena"
+            type="password"
+            value={editForm.password}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, password: event.target.value }))}
+            helperText="Deja en blanco para mantener la contrasena actual."
+          />
+          <Select
+            label="Rol"
+            value={String(editForm.roleId)}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, roleId: Number(event.target.value) }))}
+            options={ROLE_OPTIONS.map((option) => ({ label: option.label, value: String(option.value) }))}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" isLoading={updateUser.isLoading}>
+              Guardar cambios
             </Button>
           </div>
         </form>
