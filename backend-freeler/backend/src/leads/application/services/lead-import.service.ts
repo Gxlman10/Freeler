@@ -34,8 +34,6 @@ const EXPECTED_FIELDS: Array<{ key: keyof LeadEntity; label: string; required?: 
   { key: 'ciudad', label: 'Ciudad' },
   { key: 'ocupacion', label: 'Ocupacion' },
   { key: 'descripcion', label: 'Descripcion' },
-  { key: 'id_campania', label: 'ID Campania', required: true },
-  { key: 'origen', label: 'Origen' },
 ];
 
 @Injectable()
@@ -87,13 +85,14 @@ export class LeadImportService {
     importId: string;
     mapping: Record<string, string>;
     usuarioEmpresaId: number;
-    defaultOrigen?: string;
+    campaignId: number;
+    actorLabel?: string;
   }) {
     const entry = this.pending.get(params.importId);
     if (!entry) {
       throw new BadRequestException('IMPORT_NOT_FOUND_OR_EXPIRED');
     }
-    const { mapping, defaultOrigen } = params;
+    const { mapping } = params;
     const requiredFields = EXPECTED_FIELDS.filter((field) => field.required);
     const missingRequired = requiredFields.filter((field) => {
       const mappedHeader = mapping[field.key as string];
@@ -118,6 +117,7 @@ export class LeadImportService {
       const payload: Partial<LeadEntity> = {
         estado_completo: true,
         id_estado_lead: 1,
+        id_campania: params.campaignId,
       };
 
       EXPECTED_FIELDS.forEach((field) => {
@@ -134,14 +134,15 @@ export class LeadImportService {
           return;
         }
         if (field.key === 'origen') {
-          (payload as any)[field.key] = rawValue || defaultOrigen || 'IMPORTACION';
+          (payload as any)[field.key] = rawValue ?? null;
           return;
         }
         (payload as any)[field.key] = rawValue ?? null;
       });
 
       if (!payload.origen) {
-        payload.origen = defaultOrigen || 'IMPORTACION';
+        const actor = params.actorLabel ?? 'Usuario';
+        payload.origen = `Importación ${index + 1} de Excel por ${actor}`;
       }
 
       for (const requiredField of requiredFields) {
@@ -179,11 +180,7 @@ export class LeadImportService {
 
   async generateTemplate(): Promise<string> {
     const headers = EXPECTED_FIELDS.map((field) => field.label);
-    const sampleRow = EXPECTED_FIELDS.map((field) => {
-      if (field.key === 'id_campania') return '123';
-      if (field.key === 'origen') return 'REFERIDO';
-      return field.label;
-    });
+    const sampleRow = EXPECTED_FIELDS.map((field) => field.label);
     return `${headers.join(',')}\n${sampleRow.join(',')}\n`;
   }
 

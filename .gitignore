@@ -24,3 +24,10 @@ pnpm-debug.log*
 Thumbs.db
 .idea/
 .vscode/
+
+docs
+shared
+
+# Temporary helper artifacts
+apply_patch.ps1
+patch.diff

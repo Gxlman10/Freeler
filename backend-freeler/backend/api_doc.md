@@ -408,8 +408,9 @@ Notas:
 - Auth: JWT empresa rol `admin` o `supervisor`.
 - Cuerpo JSON (`ConfirmLeadImportDto`):
   - `importId` (string, requerido).
-  - `mapping` (`Record<string,string>`, requerido; claves esperadas: `nombres`, `apellidos`, `email`, `telefono`, `dni`, `ciudad`, `ocupacion`, `descripcion`, `id_campania`, `origen`).
-  - `defaultOrigen` (string, opcional).
+  - `mapping` (`Record<string,string>`, requerido; claves esperadas: `nombres`, `apellidos`, `email`, `telefono`, `dni`, `ciudad`, `ocupacion`, `descripcion`).
+  - `campaignId` (number, requerido) definido por la campaña destino seleccionada por el usuario.
+  - `actorLabel` (string, opcional) para personalizar el texto `Importación n de Excel por {actor}`.
 - Respuesta 200: `LeadImportResult`.
 - Errores: 400 cuando el mapping no cubre campos obligatorios o el import expiro.
 

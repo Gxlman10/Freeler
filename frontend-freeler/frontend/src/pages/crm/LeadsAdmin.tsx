@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LeadService, Lead, LeadDraft, unwrapLeadCollection } from '@/services/lead.service';
+import { LeadService, Lead, LeadDraft, unwrapLeadCollection, LeadImportPreview } from '@/services/lead.service';
+import { CampaignService, Campaign } from '@/services/campaign.service';
 import { UserService } from '@/services/user.service';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
@@ -39,6 +40,17 @@ const FALLBACK_STATUSES: BulkStatusOption[] = [
   { id: 3, label: 'Ganado' },
   { id: 4, label: 'Perdido' },
 ];
+const REQUIRED_IMPORT_FIELDS: Array<{ key: string; label: string; required: boolean }> = [
+  { key: 'nombres', label: 'Nombres', required: true },
+  { key: 'apellidos', label: 'Apellidos', required: true },
+  { key: 'email', label: 'Email', required: false },
+  { key: 'telefono', label: 'Telefono', required: false },
+  { key: 'dni', label: 'DNI', required: false },
+  { key: 'ciudad', label: 'Ciudad', required: false },
+  { key: 'ocupacion', label: 'Ocupacion', required: false },
+  { key: 'descripcion', label: 'Descripcion', required: false },
+];
+
 
 const getInitials = (value?: string | null) => {
   if (!value) return 'UX';
@@ -148,6 +160,13 @@ export const LeadsAdmin = () => {
   const [selectedStatusId, setSelectedStatusId] = useState<number | null>(null);
   const [isMetaDialogOpen, setMetaDialogOpen] = useState(false);
   const [isImportDialogOpen, setImportDialogOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState<LeadImportPreview | null>(null);
+  const [headerMapping, setHeaderMapping] = useState<Record<string, string>>({});
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isUploadingImport, setUploadingImport] = useState(false);
+  const [isConfirmingImport, setConfirmingImport] = useState(false);
+  const [isDownloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -156,11 +175,136 @@ export const LeadsAdmin = () => {
     descripcion: '',
   });
 
+  const companyId = user?.companyId ?? null;
+
   const leadsQuery = useQuery({
     queryKey: ['crm-admin-leads', user?.companyId],
     queryFn: () => LeadService.listByEmpresa({ limit: 250 }),
     enabled: Boolean(user),
   });
+
+  const importCampaignsQuery = useQuery({
+    queryKey: ['crm-import-campaigns', companyId],
+    queryFn: () => CampaignService.getAll({ id_empresa: companyId ?? undefined, estado: 1, limit: 500 }),
+    enabled: Boolean(companyId) && isImportDialogOpen,
+  });
+
+  const campaignOptions = useMemo(() => {
+    const payload = importCampaignsQuery.data;
+    const campaigns: Campaign[] = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload?.items)
+      ? payload.items
+      : Array.isArray(payload)
+      ? payload
+      : [];
+    return campaigns
+      .filter((camp) => typeof camp?.id_campania === 'number')
+      .map((camp) => ({ value: String(camp.id_campania), label: camp.nombre }));
+  }, [importCampaignsQuery.data]);
+
+  const hasCampaignOptions = campaignOptions.length > 0;
+  const selectedCampaignLabel = useMemo(() => {
+    return campaignOptions.find((option) => option.value === selectedCampaignId)?.label ?? '';
+  }, [campaignOptions, selectedCampaignId]);
+  const canUploadFile = hasCampaignOptions;
+
+  const resetImportState = () => {
+    setImportPreview(null);
+    setHeaderMapping({});
+    setSelectedCampaignId('');
+    setImportError(null);
+    setUploadingImport(false);
+    setConfirmingImport(false);
+  };
+
+  const handleImportDialogChange = (open: boolean) => {
+    setImportDialogOpen(open);
+    if (!open) resetImportState();
+  };
+
+  const handleImportFile = async (file?: File) => {
+    if (!file) return;
+    setUploadingImport(true);
+    setImportError(null);
+    try {
+      const preview = await LeadService.previewImport(file);
+      setImportPreview(preview);
+      setHeaderMapping(preview.suggestedMapping || {});
+    } catch {
+      setImportError('No se pudo procesar el archivo. Verifica el formato e intenta nuevamente.');
+    } finally {
+      setUploadingImport(false);
+    }
+  };
+
+  const handleImportFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    void handleImportFile(file);
+    event.target.value = '';
+  };
+
+  const handleMappingChange = (field: string, header: string) => {
+    setHeaderMapping((prev) => ({ ...prev, [field]: header }));
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+    if (!selectedCampaignId) {
+      setImportError('Selecciona una campaña para continuar.');
+      return;
+    }
+    const missing = REQUIRED_IMPORT_FIELDS.filter((field) => field.required && !headerMapping[field.key]);
+    if (missing.length) {
+      setImportError('Completa el mapeo de todos los campos obligatorios antes de confirmar.');
+      return;
+    }
+    setConfirmingImport(true);
+    setImportError(null);
+    try {
+      const actorLabel = (user?.email || `Usuario ${user?.id ?? ''}`).trim();
+      const result = await LeadService.confirmImport({
+        importId: importPreview.importId,
+        mapping: headerMapping,
+        campaignId: Number(selectedCampaignId),
+        actorLabel: actorLabel || undefined,
+      });
+      push({
+        title: 'Importación completada',
+        description: `Leads creados: ${result.created} | Errores: ${result.failed}`,
+      });
+      resetImportState();
+      setImportDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['crm-admin-leads'] });
+    } catch {
+      setImportError('No se pudo completar la importación. Inténtalo nuevamente.');
+    } finally {
+      setConfirmingImport(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    try {
+      const blob = await LeadService.downloadImportTemplate();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'plantilla_leads.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      push({
+        title: 'No se pudo descargar la plantilla',
+        description: 'Revisa tu conexión e intenta nuevamente.',
+        variant: 'danger',
+      });
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
 
   const statusesQuery = useQuery({
     queryKey: ['crm-lead-statuses'],
@@ -352,7 +496,7 @@ export const LeadsAdmin = () => {
         <div className="w-full max-w-xs">
           <Input
             label="Buscar"
-            placeholder="Nombre, correo, campana..."
+            placeholder="Nombre, correo, campaña..."
             value={filters.search}
             onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
             autoComplete="off"
@@ -411,7 +555,7 @@ export const LeadsAdmin = () => {
                 />
               </TableHead>
               <TableHead>Lead</TableHead>
-              <TableHead>Campana</TableHead>
+              <TableHead>Campaña</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Asignado a</TableHead>
               <TableHead>Origen</TableHead>
@@ -458,7 +602,7 @@ export const LeadsAdmin = () => {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{lead.campania?.nombre ?? 'Sin campana'}</TableCell>
+                  <TableCell>{lead.campania?.nombre ?? 'Sin campaña'}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusBadgeVariant(lead.estado?.nombre ?? lead.estado)}>
                       {normalizeStatusLabel(lead.estado?.nombre ?? lead.estado, 'Pendiente')}
@@ -512,53 +656,162 @@ export const LeadsAdmin = () => {
       />
 
       <Dialog
-        open={isEditDialogOpen}
-        onOpenChange={(open) => {
-          setEditDialogOpen(open);
-          if (!open) {
-            setEditingLead(null);
-            setEditLeadState({ estadoId: '', descripcion: '' });
-          }
-        }}
-        title="Editar lead"
-        description="Actualiza la informacion del lead seleccionado."
+        open={isImportDialogOpen}
+        onOpenChange={handleImportDialogChange}
+        title="Importar leads desde Excel"
+        description="Sube tu archivo y mapea las columnas para crear leads en bloque."
       >
-        {editingLead ? (
-          <form className="space-y-3" onSubmit={handleEditLeadSubmit}>
-            <Select
-              label="Estado"
-              value={editLeadState.estadoId}
-              onChange={(event) =>
-                setEditLeadState((prev) => ({ ...prev, estadoId: event.target.value }))
-              }
-              options={[
-                { label: 'No asignado', value: '' },
-                ...statusOptions.map((status) => ({
-                  value: String(status.id),
-                  label: status.label,
-                })),
-              ]}
-            />
-            <Textarea
-              label="Descripcion"
-              minRows={4}
-              value={editLeadState.descripcion}
-              onChange={(event) =>
-                setEditLeadState((prev) => ({ ...prev, descripcion: event.target.value }))
-              }
-            />
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" isLoading={editLeadMutation.isLoading}>
-                Guardar cambios
-              </Button>
+        <div className="space-y-4">
+          {!importPreview ? (
+            <>
+              <div className="space-y-2">
+                {importCampaignsQuery.isLoading ? (
+                  <p className="text-xs text-content-muted">Cargando campañas disponibles...</p>
+                ) : !hasCampaignOptions ? (
+                  <Alert
+                    variant="warning"
+                    title="No hay campañas activas"
+                    description="Crea una campaña para poder importar leads."
+                    onClose={() => handleImportDialogChange(false)}
+                  />
+                ) : (
+                  <p className="text-xs text-content-muted">
+                    Luego de subir el archivo podrás elegir la campaña destino durante el mapeo.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-content">Archivo</label>
+                <input
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleImportFileInput}
+                  disabled={!canUploadFile || isUploadingImport}
+                  className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
+                />
+                {importError ? (
+                  <p className="text-sm text-error-500">{importError}</p>
+                ) : (
+                  <p className="text-xs text-content-muted">Formatos soportados: CSV, XLSX, XLS (máx. 5 MB).</p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="secondary" onClick={handleDownloadTemplate} isLoading={isDownloadingTemplate}>
+                  Descargar plantilla
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => handleImportDialogChange(false)}>
+                  Cerrar
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-content">Vista previa detectada</p>
+                  <p className="text-xs text-content-muted">
+                    Ajusta el mapeo de columnas antes de confirmar la importación.
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" onClick={resetImportState}>
+                  Subir otro archivo
+                </Button>
+              </div>
+              <div className="space-y-2 rounded-lg border border-border-subtle p-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm font-medium text-content">Campaña destino</p>
+                  {selectedCampaignLabel ? (
+                    <span className="text-xs text-content-muted">Seleccionada: {selectedCampaignLabel}</span>
+                  ) : null}
+                </div>
+                <Select
+                  label="Campaña"
+                  required
+                  value={selectedCampaignId}
+                  onChange={(event) => setSelectedCampaignId(event.target.value)}
+                  disabled={importCampaignsQuery.isLoading || !hasCampaignOptions}
+                  options={[
+                    { label: 'Selecciona una campaña', value: '' },
+                    ...campaignOptions,
+                  ]}
+                />
+                {importCampaignsQuery.isLoading ? (
+                  <p className="text-xs text-content-muted">Actualizando campañas...</p>
+                ) : !hasCampaignOptions ? (
+                  <Alert
+                    variant="warning"
+                    title="No hay campañas activas"
+                    description="Crea una campaña para poder confirmar la importación."
+                    onClose={() => handleImportDialogChange(false)}
+                  />
+                ) : (
+                  <p className="text-xs text-content-muted">
+                    Selecciona la campaña que recibirá todos los leads de esta importación.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-3">
+                {REQUIRED_IMPORT_FIELDS.map((field) => (
+                  <div key={field.key} className="flex flex-col gap-1 sm:flex-row sm:items-center">
+                    <span className="w-full text-sm font-medium text-content sm:w-48">
+                      {field.label}
+                      {field.required ? <span className="text-error-500"> *</span> : null}
+                    </span>
+                    <select
+                      className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
+                      value={headerMapping[field.key] ?? ''}
+                      onChange={(event) => handleMappingChange(field.key, event.target.value)}
+                    >
+                      <option value="">Selecciona una columna</option>
+                      {importPreview.headers.map((header) => (
+                        <option key={`${field.key}-${header}`} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2 rounded-lg border border-border-subtle p-3">
+                <p className="text-sm font-medium text-content">Muestra de filas</p>
+                <div className="max-h-60 overflow-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-surface-muted">
+                      <tr>
+                        {importPreview.headers.map((header) => (
+                          <th key={`header-${header}`} className="px-2 py-1 text-left font-semibold">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.sampleRows.map((row, index) => (
+                        <tr key={`sample-${index}`} className="odd:bg-surface even:bg-surface-muted/40">
+                          {importPreview.headers.map((header) => (
+                            <td key={`sample-${index}-${header}`} className="px-2 py-1">
+                              {row[header] ?? ''}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              {importError ? <p className="text-sm text-error-500">{importError}</p> : null}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => handleImportDialogChange(false)}>
+                  Cancelar
+                </Button>
+                <Button type="button" onClick={handleConfirmImport} isLoading={isConfirmingImport} disabled={!selectedCampaignId}>
+                  Confirmar importación
+                </Button>
+              </div>
             </div>
-          </form>
-        ) : null}
+          )}
+        </div>
       </Dialog>
-
       <Dialog
         open={isMetaDialogOpen}
         onOpenChange={setMetaDialogOpen}
@@ -579,25 +832,6 @@ export const LeadsAdmin = () => {
         </div>
       </Dialog>
 
-      <Dialog
-        open={isImportDialogOpen}
-        onOpenChange={setImportDialogOpen}
-        title="Importar leads desde Excel"
-        description="Sube tu archivo y mapea las columnas para crear leads en bloque."
-      >
-        <div className="space-y-3">
-          <p className="text-sm text-content-muted">
-            Aun estamos preparando el asistente de importacion. Pronto podras cargar archivos XLSX o CSV y
-            transformar los datos antes de crear los leads.
-          </p>
-          <Alert
-            variant="warning"
-            title="Disponible en el siguiente release"
-            description="Nuestro equipo esta afinando los ultimos detalles de esta funcionalidad."
-            onClose={() => setImportDialogOpen(false)}
-          />
-        </div>
-      </Dialog>
     </section>
   );
 };

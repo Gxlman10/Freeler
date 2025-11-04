@@ -246,7 +246,8 @@ export const LeadService = {
   async confirmImport(payload: {
     importId: string;
     mapping: Record<string, string>;
-    defaultOrigen?: string;
+    campaignId: number;
+    actorLabel?: string;
   }) {
     const { data } = await api.post('/leads/import/confirm', payload);
     return data as LeadImportResult;

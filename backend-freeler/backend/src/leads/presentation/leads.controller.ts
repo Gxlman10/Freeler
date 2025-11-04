@@ -285,10 +285,15 @@ export class LeadsController {
     if (!actor.empresa?.id_empresa) {
       throw new ForbiddenException('USUARIO_SIN_EMPRESA');
     }
+    const actorFullName = [actor.nombres, actor.apellidos].filter(Boolean).join(' ').trim();
+    const fallbackActorLabel =
+      actorFullName || actor.email || `Usuario ${actor.id_usuario_empresa}`;
+    const actorLabel = dto.actorLabel ?? fallbackActorLabel;
     return this.importService.processImport({
       importId: dto.importId,
       mapping: dto.mapping,
-      defaultOrigen: dto.defaultOrigen,
+      campaignId: dto.campaignId,
+      actorLabel,
       usuarioEmpresaId: actor.id_usuario_empresa,
     });
   }
@@ -330,5 +335,3 @@ export class LeadsController {
     return { ok: true, resource: 'leads' };
   }
 }
-
-
