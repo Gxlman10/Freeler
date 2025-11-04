@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   ILeadRepository,
   LEAD_REPOSITORY,
@@ -12,7 +12,11 @@ export class FindLeadByIdUseCase {
   ) {}
 
   async execute(id: string | number) {
-    const lead = await this.repo.findById(Number(id));
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId) || numericId <= 0) {
+      throw new BadRequestException('LEAD_ID_INVALIDO');
+    }
+    const lead = await this.repo.findById(numericId);
     if (!lead) throw new NotFoundException('LEAD_NOT_FOUND');
     return lead;
   }

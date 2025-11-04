@@ -1,4 +1,4 @@
-import { InjectRepository } from '@nestjs/typeorm';
+﻿import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository } from 'typeorm';
 import { ILeadRepository } from '../../application/interfaces/lead.repository.interface';
 import { LeadEntity } from '../entities/lead.entity';
@@ -13,12 +13,21 @@ export class TypeormLeadRepository implements ILeadRepository {
 
   async create(data: Partial<LeadEntity>): Promise<LeadEntity> {
     const entity = this.repo.create(data);
-    return this.repo.save(entity);
+    const saved = await this.repo.save(entity);
+    const withRelations = await this.findById(saved.id_lead);
+    if (!withRelations) throw new NotFoundException('NOT_FOUND');
+    return withRelations;
   }
 
   findById(id: number) {
-    const where: FindOptionsWhere<LeadEntity> = { id_lead: id };
-    return this.repo.findOne({ where });
+    return this.repo
+      .createQueryBuilder('l')
+      .leftJoinAndSelect('l.campania', 'campania')
+      .leftJoinAndSelect('l.estado', 'estado')
+      .leftJoinAndSelect('l.asignaciones', 'asignaciones', 'asignaciones.estado = 1')
+      .leftJoinAndSelect('asignaciones.asignado', 'asignado')
+      .where('l.id_lead = :id', { id })
+      .getOne();
   }
 
   async update(id: number, data: Partial<LeadEntity>): Promise<LeadEntity> {
@@ -27,6 +36,22 @@ export class TypeormLeadRepository implements ILeadRepository {
     if (!existing) throw new NotFoundException('NOT_FOUND');
     await this.repo.update(where, data);
     const updated = await this.findById(id);
+    if (!updated) throw new NotFoundException('NOT_FOUND');
+    return updated;
+  }
+
+  async refreshCreatedAt(id: number) {
+    const result = await this.repo
+      .createQueryBuilder()
+      .update(LeadEntity)
+      .set({ fecha_creacion: () => 'CURRENT_TIMESTAMP' })
+      .where('id_lead = :id', { id })
+      .returning('*')
+      .execute();
+
+    const [row] = result.raw as LeadEntity[];
+    if (!row) throw new NotFoundException('NOT_FOUND');
+    const updated = await this.findById(row.id_lead);
     if (!updated) throw new NotFoundException('NOT_FOUND');
     return updated;
   }
@@ -43,8 +68,15 @@ export class TypeormLeadRepository implements ILeadRepository {
       fecha_desde,
       fecha_hasta,
       asignado_a_usuario_empresa_id,
+      id_empresa,
+      id_campanias,
     } = filters;
     const qb = this.repo.createQueryBuilder('l');
+
+    qb.leftJoinAndSelect('l.campania', 'campania');
+    qb.leftJoinAndSelect('l.estado', 'estado');
+    qb.leftJoinAndSelect('l.asignaciones', 'asignaciones', 'asignaciones.estado = 1');
+    qb.leftJoinAndSelect('asignaciones.asignado', 'asignado');
 
     if (search) {
       qb.where(
@@ -55,6 +87,10 @@ export class TypeormLeadRepository implements ILeadRepository {
 
     if (id_campania)
       qb.andWhere('l.id_campania = :id_campania', { id_campania });
+    if (id_campanias?.length)
+      qb.andWhere('l.id_campania IN (:...id_campanias)', {
+        id_campanias,
+      });
     if (id_usuario_freeler)
       qb.andWhere('l.id_usuario_freeler = :id_usuario_freeler', {
         id_usuario_freeler,
@@ -71,16 +107,19 @@ export class TypeormLeadRepository implements ILeadRepository {
       qb.innerJoin(
         'freeler.asignaciones',
         'a',
-        'a.id_lead = l.id_lead AND a.estado = :aestado AND a.id_usuario_empresa = :ae',
-        { aestado: 'activo', ae: asignado_a_usuario_empresa_id },
+        'a.id_lead = l.id_lead AND a.estado = :aestado AND a.id_asignado_usuario_empresa = :ae',
+        { aestado: 1, ae: asignado_a_usuario_empresa_id },
       );
+    if (id_empresa)
+      qb.andWhere('campania.id_empresa = :id_empresa', { id_empresa });
 
     const [data, total] = await qb
       .orderBy('l.fecha_creacion', 'DESC')
+      .addOrderBy('asignaciones.fecha_asignacion', 'DESC', 'NULLS LAST')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
-    return { data, total };
+    return { data, total, page, limit };
   }
 }
 

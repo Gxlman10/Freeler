@@ -22,9 +22,28 @@ export class AuthService {
 
   async loginEmpresa(email: string, password: string) {
     const user = await this.empresaRepo.findByEmail(email);
-    if (!user) return null;
-    const ok = await bcrypt.compare(password, user.password);
+    if (!user || user.estado === 0) return null;
+
+    const passwordHash = user.password ?? '';
+    const isHash = passwordHash.startsWith('$2');
+
+    let ok = false;
+    if (isHash) {
+      ok = await bcrypt.compare(password, passwordHash);
+    } else {
+      ok = passwordHash === password;
+    }
+
     if (!ok) return null;
+
+    // Si el password estaba en texto plano lo rehashamos para futuras sesiones
+    if (!isHash) {
+      const hashed = await bcrypt.hash(password, 10);
+      await this.empresaRepo.update(user.id_usuario_empresa, {
+        password: hashed,
+      });
+    }
+
     const payload = {
       sub: user.id_usuario_empresa,
       type: 'empresa' as const,
@@ -36,9 +55,28 @@ export class AuthService {
 
   async loginFreeler(email: string, password: string) {
     const user = await this.freelerRepo.findByEmail(email);
-    if (!user) return null;
-    const ok = await bcrypt.compare(password, user.password);
+    if (!user || user.estado === 0) return null;
+
+    const passwordHash = user.password ?? '';
+    const isHash = passwordHash.startsWith('$2');
+
+    let ok = false;
+    if (isHash) {
+      ok = await bcrypt.compare(password, passwordHash);
+    } else {
+      ok = passwordHash === password;
+    }
+
     if (!ok) return null;
+
+    // Rehash en caliente si el password qued� plano en la BD hist�rica
+    if (!isHash) {
+      const hashed = await bcrypt.hash(password, 10);
+      await this.freelerRepo.update(user.id_usuario_freeler, {
+        password: hashed,
+      });
+    }
+
     const payload = {
       sub: user.id_usuario_freeler,
       type: 'freeler' as const,

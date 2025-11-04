@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { CampaignService, Campaign } from '@/services/campaign.service';
 import { SearchBar } from '@/components/common/SearchBar';
-import { FilterBar } from '@/components/common/FilterBar';
 import { CampaignGrid } from '@/components/common/CampaignGrid';
 import { CampaignCard } from '@/components/common/CampaignCard';
 import { Dialog } from '@/components/ui/Dialog';
@@ -16,17 +15,11 @@ import { useAuth } from '@/store/auth';
 import { useToast } from '@/components/common/Toasts';
 import { APP_ROUTES } from '@/utils/constants';
 import { formatCurrency, formatDate } from '@/utils/helpers';
+import { t } from '@/i18n';
 
 type Filters = {
   search?: string;
-  estado?: number;
 };
-
-const filterChips = [
-  { id: 'all', label: 'Todas', estado: undefined },
-  { id: 'active', label: 'Activas', estado: 1 },
-  { id: 'inactive', label: 'Inactivas', estado: 0 },
-];
 
 export const Home = () => {
   const { user } = useAuth();
@@ -34,7 +27,6 @@ export const Home = () => {
   const navigate = useNavigate();
 
   const [filters, setFilters] = useState<Filters>({});
-  const [selectedChip, setSelectedChip] = useState('all');
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
@@ -42,7 +34,6 @@ export const Home = () => {
   const queryFilters = useMemo(
     () => ({
       ...(filters.search ? { search: filters.search } : {}),
-      ...(typeof filters.estado === 'number' ? { estado: filters.estado } : {}),
     }),
     [filters],
   );
@@ -56,12 +47,6 @@ export const Home = () => {
 
   const handleSearch = (term: string) => {
     setFilters((prev) => ({ ...prev, search: term || undefined }));
-  };
-
-  const handleFilterSelect = (chipId: string) => {
-    setSelectedChip(chipId);
-    const chip = filterChips.find((item) => item.id === chipId);
-    setFilters((prev) => ({ ...prev, estado: chip?.estado }));
   };
 
   const campaignDetailQuery = useQuery({
@@ -97,36 +82,35 @@ export const Home = () => {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-xl border border-border bg-surface p-6 shadow-sm transition-colors">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-content">Campaas disponibles</h1>
-            <p className="text-sm text-content-muted">
-              Explora oportunidades y registra tus referidos para ganar comisiones.
-            </p>
+      <section className="mx-auto max-w-4xl rounded-2xl border border-border bg-surface p-4 shadow-sm transition-colors sm:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="hidden md:block">
+            <h1 className="text-2xl font-semibold text-content">{t('referidosHome.title')}</h1>
+            <p className="text-sm text-content-muted">{t('referidosHome.subtitle')}</p>
           </div>
-          <Button variant="ghost" onClick={() => refetch()} leftIcon={<RefreshCw className="h-4 w-4" />}>
-            Actualizar listado
+          <Button
+            variant="ghost"
+            className="w-full justify-center md:w-auto"
+            onClick={() => refetch()}
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+          >
+            {t('referidosHome.refresh')}
           </Button>
         </div>
-        <div className="mt-6 space-y-4">
-          <SearchBar onSearch={handleSearch} placeholder="Busca por campaa o empresa" />
-          <FilterBar
-            chips={filterChips.map((chip) => ({
-              id: chip.id,
-              label: chip.label,
-              isActive: chip.id === selectedChip,
-            }))}
-            onSelect={handleFilterSelect}
+        <div className="mt-4 space-y-3">
+          <SearchBar
+            onSearch={handleSearch}
+            placeholder={t('referidosHome.searchPlaceholder')}
+            className="sm:max-w-xl"
           />
         </div>
       </section>
 
       {isError && (
         <EmptyState
-          title="No pudimos cargar las campaas"
-          description="Revisa tu conexion o vuelve a intentarlo mas tarde."
-          actionLabel="Reintentar"
+          title={t('referidosHome.errorTitle')}
+          description={t('referidosHome.errorDescription')}
+          actionLabel={t('referidosHome.errorAction')}
           onAction={() => refetch()}
         />
       )}
@@ -142,8 +126,8 @@ export const Home = () => {
         </div>
       ) : campaigns.length === 0 ? (
         <EmptyState
-          title="No encontramos campaas"
-          description="Prueba cambiando los filtros o vuelve mas adelante."
+          title={t('referidosHome.emptyTitle')}
+          description={t('referidosHome.emptyDescription')}
         />
       ) : (
         <CampaignGrid>

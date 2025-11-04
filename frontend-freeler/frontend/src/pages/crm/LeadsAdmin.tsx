@@ -19,6 +19,7 @@ import { getStatusBadgeVariant, normalizeStatusLabel } from '@/utils/badges';
 import { formatDate } from '@/utils/helpers';
 import { useToast } from '@/components/common/Toasts';
 import { mapBackendRole, Role } from '@/utils/constants';
+import { useAuth } from '@/store/auth';
 
 type FiltersState = {
   search: string;
@@ -94,9 +95,14 @@ const resolveAssignee = (lead: any): { assignee: LeadAssignee | null; assignedAt
   }
 
   if (Array.isArray(lead.asignaciones) && lead.asignaciones.length) {
-    const first = lead.asignaciones[0];
+    const [first] = [...lead.asignaciones].sort((a: any, b: any) => {
+      const dateA = new Date(a.fecha_asignacion ?? 0).getTime();
+      const dateB = new Date(b.fecha_asignacion ?? 0).getTime();
+      return dateB - dateA;
+    });
+    const assigneeCandidate = first?.usuario ?? first?.asignado ?? first;
     return {
-      assignee: first?.usuario ?? first,
+      assignee: assigneeCandidate,
       assignedAt: first?.fecha_asignacion ?? null,
     };
   }
@@ -133,6 +139,7 @@ const normalizeLeads = (raw: any): Lead[] => unwrapLeadCollection<Lead>(raw);
 export const LeadsAdmin = () => {
   const { push } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -150,8 +157,9 @@ export const LeadsAdmin = () => {
   });
 
   const leadsQuery = useQuery({
-    queryKey: ['crm-admin-leads'],
-    queryFn: () => LeadService.listAll({ limit: 250, include: 'campania,estado,asignaciones' }),
+    queryKey: ['crm-admin-leads', user?.companyId],
+    queryFn: () => LeadService.listByEmpresa({ limit: 250 }),
+    enabled: Boolean(user),
   });
 
   const statusesQuery = useQuery({
@@ -285,10 +293,19 @@ export const LeadsAdmin = () => {
   };
 
   const handleBulkConfirm = () => {
-    if (!selectedAction) return;
+    if (!selectedAction || !user) {
+      if (!selectedAction) return;
+      push({
+        title: 'Sin sesion de empresa',
+        description: 'Inicia sesion nuevamente para aplicar acciones masivas.',
+        variant: 'danger',
+      });
+      return;
+    }
     const payload: Parameters<typeof LeadService.bulkUpdate>[0] = {
       leadIds: selectedIds,
       action: selectedAction,
+      usuarioEmpresaId: user.id,
     };
     if (selectedAction === 'assign') payload.vendedorId = selectedVendorId ?? undefined;
     if (selectedAction === 'change-status') payload.estadoId = selectedStatusId ?? undefined;

@@ -4,11 +4,13 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { CampanaEntity } from '../../../campanas/infrastructure/entities/campana.entity';
 import { UsuarioFreelerEntity } from '../../../usuarios-freeler/infrastructure/entities/usuario-freeler.entity';
 import { EstadoLeadEntity } from './estado-lead.entity';
+import { AsignacionEntity } from './asignacion.entity';
 
 @Entity({ schema: 'freeler', name: 'leads' })
 export class LeadEntity {
@@ -78,6 +80,9 @@ export class LeadEntity {
     referencedColumnName: 'id_estado_lead',
   })
   estado?: EstadoLeadEntity | null;
+
+  @OneToMany(() => AsignacionEntity, (asignacion) => asignacion.lead)
+  asignaciones?: AsignacionEntity[];
 }
 
 export default LeadEntity;

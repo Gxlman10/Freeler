@@ -20,13 +20,26 @@ export class AssignLeadUseCase {
   ) {}
 
   async execute(dto: AssignLeadDto) {
-    await this.permission.ensureEmpresaActor(dto.usuarioEmpresaId);
+    const actor = await this.permission.ensureEmpresaActor(dto.usuarioEmpresaId);
     const lead = await this.leadRepo.findById(dto.leadId);
     if (!lead) throw new Error('LEAD_NOT_FOUND');
+
+    const estadoLead = lead.id_estado_lead ?? 1;
+
+    // Dejamos historial y desactivamos asignaciones previas del lead
+    await this.asignRepo
+      .createQueryBuilder()
+      .update(AsignacionEntity)
+      .set({ estado: 0 })
+      .where({ id_lead: dto.leadId, estado: 1 })
+      .execute();
+
     const asign = this.asignRepo.create({
       id_lead: dto.leadId,
-      id_usuario_empresa: dto.asignarAUsuarioEmpresaId,
-      estado: 'activo',
+      id_usuario_empresa: actor.id_usuario_empresa ?? dto.usuarioEmpresaId,
+      id_asignado_usuario_empresa: dto.asignarAUsuarioEmpresaId,
+      id_estado_lead: estadoLead,
+      estado: 1,
     });
     await this.asignRepo.save(asign);
     return { ok: true, id_asignacion: asign.id_asignacion };

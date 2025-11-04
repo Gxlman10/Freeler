@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+﻿import { FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { UserService } from '@/services/user.service';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
@@ -39,9 +39,15 @@ export const Usuarios = () => {
   const queryClient = useQueryClient();
   const { push } = useToast();
   const { user } = useAuth();
+  const usuariosQueryKey = ['crm-usuarios-empresa', user?.companyId ?? 'none'];
+
   const { data, isLoading } = useQuery({
-    queryKey: ['crm-usuarios-empresa'],
-    queryFn: () => UserService.getUsuariosEmpresa(),
+    queryKey: usuariosQueryKey,
+    queryFn: () =>
+      UserService.getUsuariosEmpresa(
+        user?.companyId ? { id_empresa: user.companyId } : {},
+      ),
+    enabled: Boolean(user?.companyId),
   });
 
   const usuarios = useMemo(
@@ -80,7 +86,7 @@ export const Usuarios = () => {
       push({ title: 'Usuario creado', description: form.nombres || 'Cuenta registrada con exito.' });
       setDialogOpen(false);
       setForm(buildInitialForm());
-      queryClient.invalidateQueries({ queryKey: ['crm-usuarios-empresa'] });
+      queryClient.invalidateQueries({ queryKey: usuariosQueryKey });
     },
     onError: () => {
       push({
@@ -120,7 +126,7 @@ export const Usuarios = () => {
       });
       setEditDialogOpen(false);
       setEditingUser(null);
-      queryClient.invalidateQueries({ queryKey: ['crm-usuarios-empresa'] });
+      queryClient.invalidateQueries({ queryKey: usuariosQueryKey });
     },
     onError: () => {
       push({
@@ -327,3 +333,4 @@ export const Usuarios = () => {
 };
 
 export default Usuarios;
+

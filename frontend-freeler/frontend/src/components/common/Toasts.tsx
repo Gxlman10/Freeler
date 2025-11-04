@@ -32,11 +32,14 @@ type ToastProviderProps = {
 };
 
 const variantClasses: Record<ToastVariant, string> = {
-  // Variantes basadas en la paleta global para mensajes de retroalimentacion
-  default: 'border-border bg-surface text-content',
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  warning: 'border-amber-200 bg-amber-50 text-amber-700',
-  danger: 'border-red-200 bg-red-50 text-red-700',
+  default:
+    'border-border bg-surface text-content dark:border-border/60 dark:bg-surface-elevated dark:text-content',
+  success:
+    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/20 dark:text-emerald-200',
+  warning:
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/40 dark:bg-amber-500/20 dark:text-amber-200',
+  danger:
+    'border-red-200 bg-red-50 text-red-700 dark:border-red-400/40 dark:bg-red-500/20 dark:text-red-200',
 };
 
 export const ToastProvider = ({ children }: ToastProviderProps) => {

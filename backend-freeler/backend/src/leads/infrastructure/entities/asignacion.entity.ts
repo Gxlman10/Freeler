@@ -14,11 +14,21 @@ export class AsignacionEntity {
   @PrimaryGeneratedColumn({ type: 'int', name: 'id_asignacion' })
   id_asignacion!: number;
 
-  @Column({ type: 'int', name: 'id_lead', nullable: true })
-  id_lead?: number | null;
+  @Column({ type: 'int', name: 'id_lead', nullable: false })
+  id_lead!: number;
 
-  @Column({ type: 'int', name: 'id_usuario_empresa', nullable: true })
-  id_usuario_empresa?: number | null;
+  @Column({ type: 'int', name: 'id_usuario_empresa', nullable: false })
+  id_usuario_empresa!: number;
+
+  @Column({
+    type: 'int',
+    name: 'id_asignado_usuario_empresa',
+    nullable: false,
+  })
+  id_asignado_usuario_empresa!: number;
+
+  @Column({ type: 'int', name: 'id_estado_lead', nullable: false })
+  id_estado_lead!: number;
 
   @CreateDateColumn({
     type: 'timestamp',
@@ -27,8 +37,9 @@ export class AsignacionEntity {
   })
   fecha_asignacion!: Date;
 
-  @Column({ type: 'varchar', length: 50, name: 'estado', default: 'activo' })
-  estado!: string;
+  // 1 = activo, 0 = inactivo
+  @Column({ type: 'int', name: 'estado', default: 1 })
+  estado!: number;
 
   @ManyToOne(() => LeadEntity, { nullable: true })
   @JoinColumn({ name: 'id_lead', referencedColumnName: 'id_lead' })
@@ -39,7 +50,14 @@ export class AsignacionEntity {
     name: 'id_usuario_empresa',
     referencedColumnName: 'id_usuario_empresa',
   })
-  usuarioEmpresa?: UsuarioEmpresaEntity | null;
+  actor?: UsuarioEmpresaEntity | null;
+
+  @ManyToOne(() => UsuarioEmpresaEntity, { nullable: true })
+  @JoinColumn({
+    name: 'id_asignado_usuario_empresa',
+    referencedColumnName: 'id_usuario_empresa',
+  })
+  asignado?: UsuarioEmpresaEntity | null;
 }
 
 export default AsignacionEntity;

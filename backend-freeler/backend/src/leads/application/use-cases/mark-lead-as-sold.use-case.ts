@@ -12,6 +12,7 @@ import { MarkLeadSoldDto } from '../../infrastructure/dto/mark-lead-sold.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CampanaEntity } from '../../../campanas/infrastructure/entities/campana.entity';
 import { Repository } from 'typeorm';
+import { AsignacionEntity } from '../../infrastructure/entities/asignacion.entity';
 
 @Injectable()
 export class MarkLeadAsSoldUseCase {
@@ -21,6 +22,8 @@ export class MarkLeadAsSoldUseCase {
     @Inject(COMISION_REPOSITORY) private readonly comRepo: IComisionRepository,
     @InjectRepository(CampanaEntity)
     private readonly campRepo: Repository<CampanaEntity>,
+    @InjectRepository(AsignacionEntity)
+    private readonly asignRepo: Repository<AsignacionEntity>,
   ) {}
 
   async execute(dto: MarkLeadSoldDto) {
@@ -37,6 +40,13 @@ export class MarkLeadAsSoldUseCase {
 
     // Actualizar estado del lead a GANADO (2)
     await this.leadRepo.update(dto.leadId, { id_estado_lead: 2 });
+    // Sincronizamos el estado de la asignación activa para mantener el historial coherente
+    await this.asignRepo
+      .createQueryBuilder()
+      .update(AsignacionEntity)
+      .set({ id_estado_lead: 2 })
+      .where({ id_lead: dto.leadId, estado: 1 })
+      .execute();
 
     // Evitar duplicar comisión por lead
     const existing = await this.comRepo.findByLeadId(dto.leadId);

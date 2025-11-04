@@ -2,11 +2,14 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
   Post,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PaginationDto } from '../../shared/application/dto/pagination.dto';
@@ -17,6 +20,9 @@ import { SoftDeleteUsuarioEmpresaUseCase } from '../application/use-cases/soft-d
 import { UpdateUsuarioEmpresaUseCase } from '../application/use-cases/update-usuario-empresa.use-case';
 import { CreateUsuarioEmpresaDto } from '../infrastructure/dto/create-usuario-empresa.dto';
 import { UpdateUsuarioEmpresaDto } from '../infrastructure/dto/update-usuario-empresa.dto';
+import { JwtAuthGuard } from '../../auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard';
+import { Roles } from '../../shared/infrastructure/decorators/roles.decorator';
 
 @ApiTags('usuarios-empresa')
 @Controller('usuarios-empresa')
@@ -37,9 +43,43 @@ export class UsuariosEmpresaController {
   }
 
   @ApiOperation({ summary: 'Listar usuarios de empresa' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'supervisor', 'vendedor', 'analista')
   @Get()
-  list(@Query() pagination: PaginationDto) {
-    return this.listUC.execute(pagination);
+  async list(
+    @Req() req: { user?: { type?: string; sub?: number } },
+    @Query() pagination: PaginationDto,
+  ) {
+    const user = req.user;
+    if (!user || user.type !== 'empresa') {
+      throw new ForbiddenException();
+    }
+    const actorId = Number(user.sub);
+    if (!Number.isFinite(actorId)) {
+      throw new ForbiddenException();
+    }
+    const actor = await this.findUC.byId(actorId);
+
+    // Intentamos obtener el id de empresa desde la relación o el campo directo
+    const companyId =
+      actor.empresa?.id_empresa ??
+      actor.id_empresa ??
+      pagination.id_empresa;
+
+    if (!companyId) {
+      throw new ForbiddenException('USUARIO_SIN_EMPRESA');
+    }
+
+    // Evitamos que el actor fuerce otra empresa distinta vía query params
+    if (
+      pagination.id_empresa &&
+      pagination.id_empresa !== companyId
+    ) {
+      throw new ForbiddenException('EMPRESA_NO_AUTORIZADA');
+    }
+
+    // A partir de aquí siempre devolvemos usuarios pertenecientes a la empresa del actor
+    return this.listUC.execute({ ...pagination, id_empresa: companyId });
   }
 
   @ApiOperation({ summary: 'Obtener usuario de empresa por ID' })

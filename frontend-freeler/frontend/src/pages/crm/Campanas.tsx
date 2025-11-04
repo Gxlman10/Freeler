@@ -46,9 +46,13 @@ export const Campanas = () => {
     setForm(buildInitialForm());
   }, []);
 
+  const companyId = user?.companyId ?? null;
+
   const { data, isLoading } = useQuery({
-    queryKey: ['crm-campanas'],
-    queryFn: () => CampaignService.getAll(),
+    queryKey: ['crm-campanas', companyId],
+    queryFn: () =>
+      CampaignService.getAll(companyId ? { id_empresa: companyId } : {}),
+    enabled: Boolean(user),
   });
 
   const campaigns: Campaign[] = Array.isArray(data?.data)
@@ -132,6 +136,22 @@ export const Campanas = () => {
           });
           return;
         }
+        if (!form.fecha_inicio) {
+          push({
+            title: 'Fecha de inicio requerida',
+            description: 'Selecciona una fecha de inicio para la campana.',
+            variant: 'warning',
+          });
+          return;
+        }
+        if (!form.fecha_fin || form.fecha_fin < form.fecha_inicio) {
+          push({
+            title: 'Rango de fechas invalido',
+            description: 'La fecha de cierre no puede ser anterior a la fecha de inicio.',
+            variant: 'danger',
+          });
+          return;
+        }
 
         createCampaign.mutate({
           ...sessionIds,
@@ -164,6 +184,22 @@ export const Campanas = () => {
       push({
         title: 'Monto invalido',
         description: 'Ingresa un monto valido para la comision.',
+        variant: 'danger',
+      });
+      return;
+    }
+    if (!editForm.fecha_inicio) {
+      push({
+        title: 'Fecha de inicio requerida',
+        description: 'Selecciona una fecha de inicio para la campana.',
+        variant: 'warning',
+      });
+      return;
+    }
+    if (!editForm.fecha_fin || editForm.fecha_fin < editForm.fecha_inicio) {
+      push({
+        title: 'Rango de fechas invalido',
+        description: 'La fecha de cierre no puede ser anterior a la fecha de inicio.',
         variant: 'danger',
       });
       return;
@@ -299,14 +335,30 @@ export const Campanas = () => {
             type="date"
             required
             value={form.fecha_inicio}
-            onChange={(event) => setForm((prev) => ({ ...prev, fecha_inicio: event.target.value }))}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setForm((prev) => ({
+                ...prev,
+                fecha_inicio: nextValue,
+                fecha_fin:
+                  prev.fecha_fin && prev.fecha_fin < nextValue ? nextValue : prev.fecha_fin,
+              }));
+            }}
           />
           <Input
             label="Fecha de cierre"
             type="date"
             required
+            min={form.fecha_inicio || undefined}
             value={form.fecha_fin}
-            onChange={(event) => setForm((prev) => ({ ...prev, fecha_fin: event.target.value }))}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setForm((prev) => ({
+                ...prev,
+                fecha_fin:
+                  prev.fecha_inicio && nextValue < prev.fecha_inicio ? prev.fecha_inicio : nextValue,
+              }));
+            }}
           />
           <div className="flex justify-end gap-2 pt-2">
             <Button
@@ -370,14 +422,30 @@ export const Campanas = () => {
             type="date"
             required
             value={editForm.fecha_inicio}
-            onChange={(event) => setEditForm((prev) => ({ ...prev, fecha_inicio: event.target.value }))}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setEditForm((prev) => ({
+                ...prev,
+                fecha_inicio: nextValue,
+                fecha_fin:
+                  prev.fecha_fin && prev.fecha_fin < nextValue ? nextValue : prev.fecha_fin,
+              }));
+            }}
           />
           <Input
             label="Fecha de cierre"
             type="date"
             required
+            min={editForm.fecha_inicio || undefined}
             value={editForm.fecha_fin}
-            onChange={(event) => setEditForm((prev) => ({ ...prev, fecha_fin: event.target.value }))}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setEditForm((prev) => ({
+                ...prev,
+                fecha_fin:
+                  prev.fecha_inicio && nextValue < prev.fecha_inicio ? prev.fecha_inicio : nextValue,
+              }));
+            }}
           />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>

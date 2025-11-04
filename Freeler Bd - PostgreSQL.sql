@@ -2,17 +2,55 @@
 -- Please log an issue at https://github.com/pgadmin-org/pgadmin4/issues/new/choose if you find any bugs, including reproduction steps.
 BEGIN;
 
-
+-- Table: freeler.asignaciones
 CREATE TABLE IF NOT EXISTS freeler.asignaciones
 (
-    id_asignacion serial NOT NULL,
-    id_lead integer,
-    id_usuario_empresa integer,
-    fecha_asignacion timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    estado character varying COLLATE pg_catalog."default" DEFAULT 'activo'::character varying,
-    CONSTRAINT asignaciones_pkey PRIMARY KEY (id_asignacion)
-);
+    id_asignacion integer NOT NULL DEFAULT nextval('freeler.asignaciones_id_asignacion_seq'::regclass),
+    id_lead integer NOT NULL,
+    id_usuario_empresa integer NOT NULL,
+    fecha_asignacion timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id_asignado_usuario_empresa integer NOT NULL,
+    id_estado_lead integer NOT NULL,
+    estado integer DEFAULT 1 COLLATE pg_catalog."default", -- 1: Activo, 0: Inactivo
+    CONSTRAINT asignaciones_pkey PRIMARY KEY (id_asignacion),
+    CONSTRAINT asignaciones_id_asignado_usuario_empresa_fkey FOREIGN KEY (id_asignado_usuario_empresa)
+        REFERENCES freeler.usuarios_empresa (id_usuario_empresa) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT asignaciones_id_estado_lead_fkey FOREIGN KEY (id_estado_lead)
+        REFERENCES freeler.estado_lead (id_estado_lead) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT asignaciones_id_lead_fkey FOREIGN KEY (id_lead)
+        REFERENCES freeler.leads (id_lead) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT asignaciones_id_usuario_empresa_fkey FOREIGN KEY (id_usuario_empresa)
+        REFERENCES freeler.usuarios_empresa (id_usuario_empresa) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
 
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS freeler.asignaciones
+    OWNER to postgres;
+
+-- Index: fki_asignaciones_id_asignado_usuario_empresa_fkey
+CREATE INDEX IF NOT EXISTS fki_asignaciones_id_asignado_usuario_empresa_fkey
+    ON freeler.asignaciones USING btree
+    (id_asignado_usuario_empresa ASC NULLS LAST)
+    WITH (fillfactor=100, deduplicate_items=True)
+    TABLESPACE pg_default;
+-- Index: fki_asignaciones_id_estado_lead_fkey
+CREATE INDEX IF NOT EXISTS fki_asignaciones_id_estado_lead_fkey
+    ON freeler.asignaciones USING btree
+    (id_estado_lead ASC NULLS LAST)
+    WITH (fillfactor=100, deduplicate_items=True)
+    TABLESPACE pg_default;
+
+
+-- Table: freeler.campanias
 CREATE TABLE IF NOT EXISTS freeler.campanias
 (
     id_campania serial NOT NULL,

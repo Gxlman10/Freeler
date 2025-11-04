@@ -231,16 +231,28 @@ export const LeadForm = ({ campaignId, lead = null, onSubmitted }: LeadFormProps
       const response = isEditing
         ? await LeadService.update(lead!.id_lead, payload)
         : await LeadService.create(payload);
+      let finalResponse = response;
+      if (isEditing && !lead?.estado_completo) {
+        try {
+          finalResponse = await LeadService.refreshCreatedAt(response.id_lead);
+        } catch {
+          push({
+            title: 'Fecha de ingreso no actualizada',
+            description: 'El lead se envio, pero no pudimos refrescar la fecha.',
+            variant: 'warning',
+          });
+        }
+      }
 
       setErrors({});
       setFeedback(
-        `Lead enviado con exito${response?.id_lead ? ` (ID ${response.id_lead})` : ''}.`,
+        `Lead enviado con exito${finalResponse?.id_lead ? ` (ID ${finalResponse.id_lead})` : ''}.`,
       );
       push({
         title: 'Referido registrado',
         description: 'Compartimos los datos con el equipo de campaas.',
       });
-      onSubmitted?.(response.id_lead, 'sent');
+      onSubmitted?.(finalResponse.id_lead, 'sent');
     } catch (error) {
       setFeedback('Ocurrio un problema al enviar el lead. Intenta nuevamente.');
       push({

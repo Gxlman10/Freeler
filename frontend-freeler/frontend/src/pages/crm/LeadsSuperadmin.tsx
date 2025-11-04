@@ -4,11 +4,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatDate } from '@/utils/helpers';
 import { Badge } from '@/components/ui/Badge';
 import { getStatusBadgeVariant, normalizeStatusLabel } from '@/utils/badges';
+import { useAuth } from '@/store/auth';
 
 export const LeadsSupervisor = () => {
+  const { user } = useAuth();
   const { data, isLoading } = useQuery({
-    queryKey: ['crm-super-leads'],
-    queryFn: () => LeadService.listAll({ limit: 50 }),
+    queryKey: ['crm-super-leads', user?.companyId],
+    queryFn: () => LeadService.listByEmpresa({ limit: 100 }),
+    enabled: Boolean(user),
   });
 
   const leads = unwrapLeadCollection(data);
@@ -18,7 +21,7 @@ export const LeadsSupervisor = () => {
       <header>
         <h1 className="text-3xl font-semibold text-content">Leads por empresas</h1>
         <p className="text-sm text-content-muted">
-          Visualiza los leads registrados para todas las campaas y empresas.
+          Visualiza los leads registrados en las campaas de tu empresa.
         </p>
       </header>
 

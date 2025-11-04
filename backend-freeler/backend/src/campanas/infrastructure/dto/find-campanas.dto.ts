@@ -8,12 +8,6 @@ export class FindCampanasDto extends PaginationDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  id_empresa?: number;
-
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
   estado?: number;
 
   @ApiPropertyOptional({ example: '2025-10-01' })

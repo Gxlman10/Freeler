@@ -10,7 +10,6 @@ import MisReferidos from '@/pages/referidos/MisReferidos';
 import DashboardReferidos from '@/pages/referidos/Dashboard';
 import Capacitacion from '@/pages/referidos/Capacitacion';
 import HomeAdmin from '@/pages/crm/HomeAdmin';
-import Empresas from '@/pages/crm/Empresas';
 import Usuarios from '@/pages/crm/Usuarios';
 import HomeSupervisor from '@/pages/crm/HomeSuperadmin';
 import Campanas from '@/pages/crm/Campanas';
@@ -73,14 +72,6 @@ export const AppRouter = () => (
           element={
             <GuardedRoute allow={[Role.ADMIN]}>
               <HomeAdmin />
-            </GuardedRoute>
-          }
-        />
-        <Route
-          path={APP_ROUTES.crm.empresas}
-          element={
-            <GuardedRoute allow={[Role.ADMIN]}>
-              <Empresas />
             </GuardedRoute>
           }
         />

@@ -28,11 +28,13 @@ const FALLBACK_STATUSES: BulkStatusOption[] = [
 type FiltersState = {
   search: string;
   statusId: number | 'all';
+  campaignId: 'all' | 'none' | number;
 };
 
 const DEFAULT_FILTERS: FiltersState = {
   search: '',
   statusId: 'all',
+  campaignId: 'all',
 };
 
 const getInitials = (value?: string | null) => {
@@ -68,10 +70,23 @@ const resolveStatusIdByName = (statuses: BulkStatusOption[], name: string) => {
   return match?.id;
 };
 
-const computeDurationLabel = (createdAt?: string) => {
+const selectActiveAssignment = (lead?: Lead | null) => {
+  if (!lead) return null;
+  const list = Array.isArray(lead.asignaciones) ? lead.asignaciones : [];
+  if (!list.length) return null;
+  const [first] = [...list].sort((a, b) => {
+    const dateA = new Date(a.fecha_asignacion ?? 0).getTime();
+    const dateB = new Date(b.fecha_asignacion ?? 0).getTime();
+    return dateB - dateA;
+  });
+  return first;
+};
+
+const computeAssignmentDuration = (createdAt?: string, assignedAt?: string | null) => {
   if (!createdAt) return '-';
   const created = new Date(createdAt);
-  const diffMs = Math.max(Date.now() - created.getTime(), 0);
+  const end = assignedAt ? new Date(assignedAt) : new Date();
+  const diffMs = Math.max(end.getTime() - created.getTime(), 0);
   const totalMinutes = Math.round(diffMs / (1000 * 60));
   if (totalMinutes < 60) return `${totalMinutes}m`;
   const totalHours = Math.round(diffMs / (1000 * 60 * 60));
@@ -81,6 +96,7 @@ const computeDurationLabel = (createdAt?: string) => {
   return remainingHours ? `${days}d ${remainingHours}h` : `${days}d`;
 };
 
+// Lead Vendedor Page
 export const LeadsVendedor = () => {
   const { push } = useToast();
   const queryClient = useQueryClient();
@@ -94,10 +110,31 @@ export const LeadsVendedor = () => {
   const [selectedVendorId, setSelectedVendorId] = useState<number | null>(user?.id ?? null);
   const [kanbanDetail, setKanbanDetail] = useState<'origen' | 'ciudad' | 'telefono' | 'email'>('origen');
 
+  const serverFilters = useMemo(() => {
+    const normalizedSearch = filters.search.trim();
+    const numericCampaign =
+      filters.campaignId !== 'all' && filters.campaignId !== 'none'
+        ? Number(filters.campaignId)
+        : undefined;
+    return {
+      limit: 250,
+      search: normalizedSearch ? normalizedSearch : undefined,
+      id_estado_lead: filters.statusId === 'all' ? undefined : filters.statusId,
+      id_campania: numericCampaign,
+    };
+  }, [filters]);
+
   const leadsQuery = useQuery({
-    queryKey: ['crm-leads-assigned'],
+    queryKey: [
+      'crm-leads-assigned',
+      user?.id ?? null,
+      serverFilters.search ?? null,
+      serverFilters.id_estado_lead ?? null,
+      filters.campaignId,
+    ],
+    enabled: Boolean(user?.id),
     queryFn: async () => {
-      const response = await LeadService.listAssignedToMe();
+      const response = await LeadService.listAssignedToMe(serverFilters);
       return normalizeLeads(response);
     },
   });
@@ -122,6 +159,22 @@ export const LeadsVendedor = () => {
     setLeadItems(leadsQuery.data ?? []);
   }, [leadsQuery.data]);
 
+  const campaignOptions = useMemo(() => {
+    const map = new Map<string, { value: string; label: string }>();
+    leadItems.forEach((lead) => {
+      const id = lead.campania?.id_campania;
+      if (id) {
+        const key = String(id);
+        if (!map.has(key)) {
+          map.set(key, { value: key, label: lead.campania?.nombre ?? `Campana ${key}` });
+        }
+      } else {
+        map.set('none', { value: 'none', label: 'Sin campana' });
+      }
+    });
+    return [{ value: 'all', label: 'Todas las campanas' }, ...Array.from(map.values())];
+  }, [leadItems]);
+
   const filteredLeads = useMemo(() => {
     const term = filters.search.trim().toLowerCase();
     return leadItems
@@ -144,6 +197,11 @@ export const LeadsVendedor = () => {
         const statusId = lead.estado?.id_estado_lead ?? lead.id_estado_lead;
         return Number(statusId) === Number(filters.statusId);
       })
+      .filter((lead) => {
+        if (filters.campaignId === 'all') return true;
+        if (filters.campaignId === 'none') return !lead.campania;
+        return lead.campania?.id_campania === Number(filters.campaignId);
+      })
       .sort((a, b) => {
         const dateA = new Date(a.fecha_creacion ?? 0).getTime();
         const dateB = new Date(b.fecha_creacion ?? 0).getTime();
@@ -164,6 +222,10 @@ export const LeadsVendedor = () => {
     setSelectedAction(null);
     setSelectedVendorId(user?.id ?? null);
     setSelectedStatusId(null);
+    setFilters((prev) => ({
+      ...prev,
+      campaignId: 'all',
+    }));
   }, [view]);
 
   useEffect(() => {
@@ -250,9 +312,18 @@ export const LeadsVendedor = () => {
 
   const handleBulkConfirm = () => {
     if (!selectedAction || !selectedIds.length) return;
+    if (!user?.id) {
+      push({
+        title: 'Sesion requerida',
+        description: 'Debes iniciar sesion nuevamente para aplicar esta accion.',
+        variant: 'danger',
+      });
+      return;
+    }
     const payload: Parameters<typeof LeadService.bulkUpdate>[0] = {
       leadIds: selectedIds,
       action: selectedAction,
+      usuarioEmpresaId: user.id,
     };
     if (selectedAction === 'assign') {
       payload.vendedorId = selectedVendorId ?? undefined;
@@ -328,38 +399,57 @@ export const LeadsVendedor = () => {
             autoComplete="off"
           />
         </div>
-      <div className="w-full max-w-xs">
-        <Select
-          label="Estado"
-          value={filters.statusId === 'all' ? 'all' : String(filters.statusId)}
-          onChange={(event) =>
-            setFilters((prev) => ({
-              ...prev,
-              statusId: event.target.value === 'all' ? 'all' : Number(event.target.value),
-            }))
-          }
-          options={[
-            { label: 'Todos los estados', value: 'all' },
-            ...statusOptions.map((status) => ({ value: status.id, label: status.label })),
-          ]}
-        />
-      </div>
-      <div className="w-full max-w-xs">
-        <Select
-          label="Detalle en tarjetas"
-          value={kanbanDetail}
-          onChange={(event) => {
-            const value = event.target.value as 'origen' | 'ciudad' | 'telefono' | 'email';
-            setKanbanDetail(value);
-          }}
-          options={[
-            { label: 'Mostrar origen', value: 'origen' },
-            { label: 'Mostrar ciudad', value: 'ciudad' },
-            { label: 'Mostrar telefono', value: 'telefono' },
-            { label: 'Mostrar correo', value: 'email' },
-          ]}
-        />
-      </div>
+        <div className="w-full max-w-xs">
+          <Select
+            label="Estado"
+            value={filters.statusId === 'all' ? 'all' : String(filters.statusId)}
+            onChange={(event) =>
+              setFilters((prev) => ({
+                ...prev,
+                statusId: event.target.value === 'all' ? 'all' : Number(event.target.value),
+              }))
+            }
+            options={[
+              { label: 'Todos los estados', value: 'all' },
+              ...statusOptions.map((status) => ({ value: status.id, label: status.label })),
+            ]}
+          />
+        </div>
+        <div className="w-full max-w-xs">
+          <Select
+            label="Campana"
+            value={filters.campaignId === 'all' ? 'all' : String(filters.campaignId)}
+            onChange={(event) => {
+              const value = event.target.value;
+              setFilters((prev) => ({
+                ...prev,
+                campaignId:
+                  value === 'all'
+                    ? 'all'
+                    : value === 'none'
+                    ? 'none'
+                    : (Number(value) as FiltersState['campaignId']),
+              }));
+            }}
+            options={campaignOptions}
+          />
+        </div>
+        <div className="w-full max-w-xs">
+          <Select
+            label="Detalle en tarjetas"
+            value={kanbanDetail}
+            onChange={(event) => {
+              const value = event.target.value as 'origen' | 'ciudad' | 'telefono' | 'email';
+              setKanbanDetail(value);
+            }}
+            options={[
+              { label: 'Mostrar origen', value: 'origen' },
+              { label: 'Mostrar ciudad', value: 'ciudad' },
+              { label: 'Mostrar telefono', value: 'telefono' },
+              { label: 'Mostrar correo', value: 'email' },
+            ]}
+          />
+        </div>
       </div>
 
       {view === 'table' ? (
@@ -398,6 +488,8 @@ export const LeadsVendedor = () => {
                   `${lead.nombres ?? ''} ${lead.apellidos ?? ''}`.trim() ||
                   lead.email ||
                   'Lead sin nombre';
+                const assignment = selectActiveAssignment(lead);
+                const assignedAt = assignment?.fecha_asignacion ?? null;
                 return (
                   <TableRow key={lead.id_lead} className={isSelected ? 'bg-surface-muted/60' : undefined}>
                     <TableCell className="w-10">
@@ -434,7 +526,7 @@ export const LeadsVendedor = () => {
                     </TableCell>
                     <TableCell>{formatDate(lead.fecha_creacion)}</TableCell>
                     <TableCell className="text-sm text-content-muted">
-                      {computeDurationLabel(lead.fecha_creacion)}
+                      {computeAssignmentDuration(lead.fecha_creacion, assignedAt)}
                     </TableCell>
                   </TableRow>
                 );

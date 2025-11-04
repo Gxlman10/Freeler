@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/utils/cn';
+import { t } from '@/i18n';
 
 type SearchBarProps = {
   defaultValue?: string;
@@ -15,7 +16,7 @@ type SearchBarProps = {
 export const SearchBar = ({
   // Barra de busqueda reutilizable para listas filtrables
   defaultValue = '',
-  placeholder = 'Buscar...',
+  placeholder = t('searchBar.defaultPlaceholder'),
   isLoading = false,
   onSearch,
   onClear,
@@ -46,11 +47,11 @@ export const SearchBar = ({
       />
       <div className="flex gap-2">
         <Button type="submit" isLoading={isLoading}>
-          Buscar
+          {t('searchBar.submit')}
         </Button>
         {term && (
           <Button type="button" variant="ghost" onClick={handleClear}>
-            Limpiar
+            {t('searchBar.clear')}
           </Button>
         )}
       </div>

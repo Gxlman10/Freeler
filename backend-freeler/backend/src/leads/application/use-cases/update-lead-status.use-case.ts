@@ -1,10 +1,13 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { UpdateLeadStatusDto } from '../../infrastructure/dto/update-lead-status.dto';
 import {
   ILeadRepository,
   LEAD_REPOSITORY,
 } from '../interfaces/lead.repository.interface';
 import LeadsPermissionService from '../services/leads-permission.service';
+import { AsignacionEntity } from '../../infrastructure/entities/asignacion.entity';
 
 @Injectable()
 export class UpdateLeadStatusUseCase {
@@ -12,10 +15,36 @@ export class UpdateLeadStatusUseCase {
     @Inject(LEAD_REPOSITORY)
     private readonly leadRepo: ILeadRepository,
     private readonly permission: LeadsPermissionService,
+    @InjectRepository(AsignacionEntity)
+    private readonly asignRepo: Repository<AsignacionEntity>,
   ) {}
 
   async execute(dto: UpdateLeadStatusDto) {
-    await this.permission.ensureEmpresaActor(dto.usuarioEmpresaId);
+    const actor = await this.permission.ensureEmpresaActor(dto.usuarioEmpresaId);
+
+    const activeAssignment = await this.asignRepo.findOne({
+      where: { id_lead: dto.leadId, estado: 1 },
+      order: { fecha_asignacion: 'DESC' },
+    });
+
+    if (!activeAssignment) {
+      throw new ForbiddenException('LEAD_SIN_VENDEDOR_ASIGNADO');
+    }
+
+    const roleName = actor.rol?.nombre?.toLowerCase();
+    if (
+      roleName === 'vendedor' &&
+      activeAssignment.id_asignado_usuario_empresa !== actor.id_usuario_empresa
+    ) {
+      throw new ForbiddenException('LEAD_NO_ASIGNADO_AL_VENDEDOR');
+    }
+
+    // Actualizamos el id_estado_lead en el registro histórico de la asignación
+    await this.asignRepo.update(
+      { id_asignacion: activeAssignment.id_asignacion },
+      { id_estado_lead: dto.id_estado_lead },
+    );
+
     const updated = await this.leadRepo.update(dto.leadId, {
       id_estado_lead: dto.id_estado_lead,
     });

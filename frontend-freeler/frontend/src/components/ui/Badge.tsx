@@ -33,7 +33,7 @@ type BadgeProps = {
 export const Badge = ({ children, variant = 'default', className }: BadgeProps) => (
   <span
     className={cn(
-      /* Badge con soporte para variantes de color y tokens de diseo y superficie y tipografa y espaciado */
+      /* Badge con soporte para variantes de color y tokens de diseño y superficie y tipografa y espaciado */
       'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
       variants[variant],
       className,

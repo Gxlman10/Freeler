@@ -54,7 +54,6 @@ export class TypeormCampanaRepository implements ICampanaRepository {
       fecha_inicio_desde,
     } = filters;
     const qb = this.repo.createQueryBuilder('c');
-    qb.leftJoinAndSelect('c.empresa', 'empresa');
     qb.loadRelationCountAndMap(
       'c.totalReferidos',
       'c.leads',

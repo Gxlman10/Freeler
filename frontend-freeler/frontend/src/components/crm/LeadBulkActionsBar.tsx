@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { cn } from '@/utils/cn';
 
-export type LeadBulkAction = 'activate' | 'deactivate' | 'assign' | 'change-status' | null;
+export type LeadBulkAction = 'assign' | 'change-status' | null;
 
 export type BulkVendorOption = {
   id: number;
@@ -30,8 +30,6 @@ type LeadBulkActionsBarProps = {
 };
 
 const ACTION_BUTTONS: Array<{ key: Exclude<LeadBulkAction, null>; label: string }> = [
-  { key: 'activate', label: 'Activar' },
-  { key: 'deactivate', label: 'Inactivar' },
   { key: 'assign', label: 'Asignar' },
   { key: 'change-status', label: 'Cambiar estado' },
 ];
@@ -52,11 +50,13 @@ export const LeadBulkActionsBar = ({
 }: LeadBulkActionsBarProps) => {
   if (!selectedCount) return null;
 
-  const requiresVendor = action === 'assign';
-  const requiresStatus = action === 'change-status';
+  const currentAction: Exclude<LeadBulkAction, null> | null = action ?? null;
+
+  const requiresVendor = currentAction === 'assign';
+  const requiresStatus = currentAction === 'change-status';
   const confirmDisabled =
     disabled ||
-    !action ||
+    !currentAction ||
     (requiresVendor && !selectedVendorId) ||
     (requiresStatus && !selectedStatusId);
 
@@ -75,9 +75,9 @@ export const LeadBulkActionsBar = ({
             <Button
               key={item.key}
               type="button"
-              variant={action === item.key ? 'primary' : 'ghost'}
+              variant={currentAction === item.key ? 'primary' : 'ghost'}
               onClick={() => onActionChange(item.key)}
-              className={cn('h-9 px-3 text-xs font-medium', action === item.key && 'shadow-sm')}
+              className={cn('h-9 px-3 text-xs font-medium', currentAction === item.key && 'shadow-sm')}
             >
               {item.label}
             </Button>

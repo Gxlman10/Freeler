@@ -18,6 +18,7 @@ export class BulkUpdateAsignacionesUseCase {
 
   async execute(dto: BulkUpdateAsignacionesDto) {
     await this.permission.ensureEmpresaActor(dto.actorUsuarioEmpresaId);
+    const estadoObjetivo = dto.estadoObjetivo === 'activo' ? 1 : 0;
 
     // Construir query para obtener IDs de asignación a actualizar
     const qb = this.asignRepo.createQueryBuilder('a');
@@ -34,13 +35,13 @@ export class BulkUpdateAsignacionesUseCase {
     }
 
     if (dto.usuarioEmpresaIdAsignado) {
-      qb.andWhere('a.id_usuario_empresa = :ue', {
+      qb.andWhere('a.id_asignado_usuario_empresa = :ue', {
         ue: dto.usuarioEmpresaIdAsignado,
       });
     }
 
     if (dto.soloInactivas) {
-      qb.andWhere('a.estado = :est', { est: 'inactivo' });
+      qb.andWhere('a.estado = :est', { est: 0 });
     }
 
     if (dto.fecha_desde) {
@@ -66,7 +67,8 @@ export class BulkUpdateAsignacionesUseCase {
     const result = await this.asignRepo
       .createQueryBuilder()
       .update(AsignacionEntity)
-      .set({ estado: dto.estadoObjetivo })
+      // Se escribe el estado como 1 (activo) o 0 (inactivo) para alinear con la tabla
+      .set({ estado: estadoObjetivo })
       .where({ id_asignacion: In(ids) })
       .execute();
 

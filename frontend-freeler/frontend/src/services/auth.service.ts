@@ -31,14 +31,17 @@ const persistUser = (user: SessionUser | null) => {
   localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
 };
 
-const buildSessionUser = (decoded: DecodedToken, token: string): SessionUser => ({
-  id: decoded.sub,
-  email: decoded.email ?? '',
-  type: decoded.type,
-  role: mapBackendRole(decoded.role ?? undefined),
-  companyId: decoded.companyId,
-  token,
-});
+const buildSessionUser = (decoded: DecodedToken, token: string): SessionUser => {
+  const parsedId = Number(decoded.sub);
+  return {
+    id: Number.isFinite(parsedId) ? parsedId : 0,
+    email: decoded.email ?? '',
+    type: decoded.type,
+    role: mapBackendRole(decoded.role ?? undefined),
+    companyId: decoded.companyId,
+    token,
+  };
+};
 
 const extractCompanyId = (profile: unknown): number | undefined => {
   if (!profile || typeof profile !== 'object') return undefined;
@@ -78,8 +81,10 @@ export const AuthService = {
     const stored = safeJsonParse<SessionUser>(localStorage.getItem(STORAGE_KEYS.user));
     if (!stored) return null;
     const normalizedRole = mapBackendRole((stored.role as unknown as string) ?? null);
+    const parsedId = Number((stored as any).id);
     return {
       ...stored,
+      id: Number.isFinite(parsedId) ? parsedId : 0,
       role: normalizedRole,
     };
   },

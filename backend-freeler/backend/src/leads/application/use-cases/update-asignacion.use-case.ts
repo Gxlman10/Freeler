@@ -17,7 +17,9 @@ export class UpdateAsignacionUseCase {
     await this.permission.ensureEmpresaActor(dto.usuarioEmpresaId);
     const asign = await this.repo.findOne({ where: { id_asignacion } });
     if (!asign) throw new NotFoundException('ASIGNACION_NOT_FOUND');
-    asign.estado = dto.estado;
+    const estadoNumerico = dto.estado === 'activo' ? 1 : 0;
+    // Mantener el historial marcando la asignación con el estado numérico equivalente
+    asign.estado = estadoNumerico;
     await this.repo.save(asign);
     return { ok: true };
   }

@@ -17,6 +17,13 @@ export class PaginationDto {
   @Min(1)
   limit?: number = 10;
 
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  id_empresa?: number;
+
   @ApiPropertyOptional({ example: 'ana' })
   @IsOptional()
   @IsString()

@@ -62,15 +62,21 @@ export class TypeormUsuarioEmpresaRepository
     return updated;
   }
 
-  async paginate({ page = 1, limit = 10, search }: PaginationDto) {
+  async paginate({ page = 1, limit = 10, search, id_empresa }: PaginationDto) {
     const qb = this.repo
       .createQueryBuilder('u')
       .leftJoinAndSelect('u.empresa', 'empresa')
       .leftJoinAndSelect('u.rol', 'rol');
 
+    qb.where('1=1');
+
+    if (id_empresa) {
+      qb.andWhere('u.id_empresa = :empresaId', { empresaId: id_empresa });
+    }
+
     if (search) {
-      qb.where(
-        'LOWER(u.nombres) LIKE LOWER(:q) OR LOWER(u.apellidos) LIKE LOWER(:q) OR LOWER(u.email) LIKE LOWER(:q)',
+      qb.andWhere(
+        '(LOWER(u.nombres) LIKE LOWER(:q) OR LOWER(u.apellidos) LIKE LOWER(:q) OR LOWER(u.email) LIKE LOWER(:q))',
         { q: `%${search}%` },
       );
     }

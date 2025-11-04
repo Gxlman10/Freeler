@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { USUARIO_EMPRESA_REPOSITORY } from './application/interfaces/usuario-empresa.repository.interface';
 import { CreateUsuarioEmpresaUseCase } from './application/use-cases/create-usuario-empresa.use-case';
@@ -31,3 +31,4 @@ import { RolEntity } from '../roles/infrastructure/entities/rol.entity';
   exports: [USUARIO_EMPRESA_REPOSITORY, CreateUsuarioEmpresaUseCase],
 })
 export class UsuariosEmpresaModule {}
+

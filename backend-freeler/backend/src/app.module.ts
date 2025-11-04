@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import appConfig from './shared/infrastructure/config/app.config';
 import dbConfig from './shared/infrastructure/config/database.config';
 import jwtConfig from './shared/infrastructure/config/jwt.config';
+import apiperuConfig from './shared/infrastructure/config/apiperu.config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 // Features
@@ -15,12 +16,13 @@ import { LeadsModule } from './leads/leads.module';
 import { ComisionesModule } from './comisiones/comisiones.module';
 import { AsignacionesModule } from './asignaciones/asignaciones.module';
 import { CampanasModule } from './campanas/campanas.module';
+import { DocumentosModule } from './documentos/documentos.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, dbConfig, jwtConfig],
+      load: [appConfig, dbConfig, jwtConfig, apiperuConfig],
       envFilePath: ['.env.local', `.env.${process.env.NODE_ENV ?? 'development'}`, '.env'],
     }),
 
@@ -76,6 +78,7 @@ import { CampanasModule } from './campanas/campanas.module';
     ComisionesModule,
     AsignacionesModule,
     CampanasModule,
+    DocumentosModule,
   ],
 })
 export class AppModule {}
