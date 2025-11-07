@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/store/auth';
-import { Role } from '@/utils/constants';
+import { APP_ROUTES, Role } from '@/utils/constants';
 
 type Props = {
   children: ReactNode;
@@ -10,12 +10,18 @@ type Props = {
 
 export const GuardedRoute = ({ children, allow }: Props) => {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
   if (isLoading) {
     return <div className="p-4 text-sm text-muted-foreground">Validando sesion...</div>;
   }
-  if (!user) return <Navigate to="/crm/login" replace />;
+  if (!user) {
+    return <Navigate to={APP_ROUTES.crm.login} replace state={{ from: location.pathname }} />;
+  }
+  if (user.type !== 'empresa') {
+    return <Navigate to={APP_ROUTES.crm.login} replace />;
+  }
   if (!user.role || !allow.includes(user.role)) {
-    return <Navigate to="/crm/sin-acceso" replace />;
+    return <Navigate to={APP_ROUTES.crm.sinAcceso} replace />;
   }
   return <>{children}</>;
 };

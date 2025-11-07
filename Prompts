@@ -1,0 +1,8 @@
+Tengo algunos problemas que he notado en la platafomra de referidos es que 
+Problemas:
+1. El nro total de referidos en los cards de las campañas tambien incluye de los importados.
+2. En cuanto a lo responsivo: en desktop en cada page el header siempre es fijo
+
+
+Soluciones:
+1. ese total debe filtrar solo los que tienen usuario id o todos los que tienen origen: Freeler

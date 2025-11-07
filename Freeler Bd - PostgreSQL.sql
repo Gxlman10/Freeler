@@ -251,4 +251,22 @@ ALTER TABLE IF EXISTS freeler.usuarios_empresa
     ON UPDATE NO ACTION
     ON DELETE NO ACTION;
 
+-- Permitir valores nulos en apellidos de la tabla leads para soportar importaciones parciales
+ALTER TABLE IF EXISTS freeler.leads
+    ALTER COLUMN apellidos DROP NOT NULL;
+
+-- Catálogo oficial de estados de lead con nombres normalizados
+INSERT INTO freeler.estado_lead (id_estado_lead, nombre, descripcion)
+VALUES
+    (1, 'Pendiente', 'Lead recibido pendiente de revisión'),
+    (2, 'Asignado', 'Lead asignado a un vendedor'),
+    (3, 'Contactado', 'Lead ya tuvo el primer contacto'),
+    (4, 'En gestión', 'Lead en seguimiento activo'),
+    (5, 'Perdido', 'Se descartó al lead'),
+    (6, 'Ganado', 'Lead convertido en venta')
+ON CONFLICT (id_estado_lead)
+DO UPDATE
+    SET nombre = EXCLUDED.nombre,
+        descripcion = EXCLUDED.descripcion;
+
 END;

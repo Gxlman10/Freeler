@@ -31,3 +31,6 @@ shared
 # Temporary helper artifacts
 apply_patch.ps1
 patch.diff
+
+# Runtime tmp artifacts
+backend-freeler/backend/tmp/

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lead, LeadService, unwrapLeadCollection } from '@/services/lead.service';
+import { LeadService, unwrapLeadCollection } from '@/services/lead.service';
+import type { Lead } from '@/services/lead.service';
 import { useAuth } from '@/store/auth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { EmptyState } from '@/components/common/EmptyState';

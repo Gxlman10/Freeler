@@ -1,6 +1,7 @@
 import { api, setAuthToken } from './api';
 import { decodeJwt, safeJsonParse } from '@/utils/helpers';
-import { mapBackendRole, Role, SessionType, STORAGE_KEYS } from '@/utils/constants';
+import { mapBackendRole, Role, STORAGE_KEYS } from '@/utils/constants';
+import type { SessionType } from '@/utils/constants';
 
 type LoginResponse = {
   access_token: string;

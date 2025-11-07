@@ -24,7 +24,8 @@ import { getRoleBadgeVariant } from '@/utils/badges';
 import { cn } from '@/utils/cn';
 import { useToast } from '@/components/common/Toasts';
 import { AuthService } from '@/services/auth.service';
-import { UserService, Empresa, UsuarioEmpresa } from '@/services/user.service';
+import { UserService } from '@/services/user.service';
+import type { Empresa, UsuarioEmpresa } from '@/services/user.service';
 import { storage } from '@/utils/helpers';
 import { ThemeSwitch } from '@/components/common/ThemeSwitch';
 import freelerLogo from '/freeler_logo.svg';
@@ -177,7 +178,12 @@ export const CrmShell = () => {
   const navItems = useMemo(() => buildNavItems(user?.role ?? null), [user?.role]);
 
   useEffect(() => {
-    if (!isLoading && (!user || user.type !== 'empresa')) {
+    if (isLoading) return;
+    if (!user) {
+      navigate(APP_ROUTES.crm.login, { replace: true });
+      return;
+    }
+    if (user.type !== 'empresa') {
       navigate(APP_ROUTES.crm.login, { replace: true });
     }
   }, [isLoading, user, navigate]);

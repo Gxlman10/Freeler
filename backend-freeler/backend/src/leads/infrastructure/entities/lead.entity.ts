@@ -26,8 +26,8 @@ export class LeadEntity {
   @Column({ type: 'varchar', length: 255, name: 'nombres' })
   nombres!: string;
 
-  @Column({ type: 'varchar', length: 255, name: 'apellidos' })
-  apellidos!: string;
+  @Column({ type: 'varchar', length: 255, name: 'apellidos', nullable: true })
+  apellidos?: string | null;
 
   @Column({ type: 'varchar', length: 255, name: 'dni', nullable: true })
   dni?: string | null;

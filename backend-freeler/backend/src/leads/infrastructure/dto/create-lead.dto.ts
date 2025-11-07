@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEmail,
@@ -11,12 +11,23 @@ import {
   Min,
 } from 'class-validator';
 
+const sanitizeOptionalString = ({ value }: { value: unknown }) => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
 export class CreateLeadDto {
-  @ApiProperty({ example: 10 })
+  @ApiPropertyOptional({
+    example: 10,
+    description: 'ID del usuario freeler que registró el lead (opcional para empresa).',
+  })
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  usuarioFreelerId!: number;
+  usuarioFreelerId?: number | null;
 
   @ApiProperty({ example: 5 })
   @Type(() => Number)
@@ -33,40 +44,46 @@ export class CreateLeadDto {
   @IsString()
   @Length(1, 255)
   nombres!: string;
-  @ApiProperty({ example: 'Pérez' })
-  @IsString()
-  @Length(1, 255)
-  apellidos!: string;
-
-  @ApiPropertyOptional({ example: '71384562' })
+  @ApiPropertyOptional({ example: 'Pérez', type: String })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  dni?: string;
-  @ApiPropertyOptional({ example: 'ana@example.com' })
+  apellidos?: string | null;
+
+  @ApiPropertyOptional({ example: '71384562', type: String })
+  @Transform(sanitizeOptionalString)
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  dni?: string | null;
+  @ApiPropertyOptional({ example: 'ana@example.com', type: String })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsEmail()
   @MaxLength(255)
-  email?: string;
-  @ApiPropertyOptional({ example: '+51987654321' })
+  email?: string | null;
+  @ApiProperty({ example: '+51987654321', type: String })
+  @IsString()
+  @Length(1, 255)
+  telefono!: string;
+  @ApiPropertyOptional({ example: 'Estudiante', type: String })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  telefono?: string;
-  @ApiPropertyOptional({ example: 'Estudiante' })
+  ocupacion?: string | null;
+  @ApiPropertyOptional({ example: 'Lima', type: String })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  ocupacion?: string;
-  @ApiPropertyOptional({ example: 'Lima' })
+  ciudad?: string | null;
+  @ApiPropertyOptional({ example: 'Interesado en plan premium', type: String })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsString()
-  @MaxLength(255)
-  ciudad?: string;
-  @ApiPropertyOptional({ example: 'Interesado en plan premium' })
-  @IsOptional()
-  @IsString()
-  descripcion?: string;
+  descripcion?: string | null;
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()

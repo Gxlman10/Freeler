@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CampaignService, Campaign, CreateCampaignPayload } from '@/services/campaign.service';
+import { CampaignService } from '@/services/campaign.service';
+import type { Campaign, CreateCampaignPayload } from '@/services/campaign.service';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';

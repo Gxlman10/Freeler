@@ -1,7 +1,16 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+﻿import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, ChevronRight, Loader2, XCircle } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LeadService, Lead, LeadDraft, unwrapLeadCollection, LeadImportPreview } from '@/services/lead.service';
-import { CampaignService, Campaign } from '@/services/campaign.service';
+import { LeadService, unwrapLeadCollection } from '@/services/lead.service';
+import type {
+  Lead,
+  LeadDraft,
+  LeadImportPreview,
+  LeadImportJob,
+  LeadImportJobStatus,
+} from '@/services/lead.service';
+import { CampaignService } from '@/services/campaign.service';
+import type { Campaign } from '@/services/campaign.service';
 import { UserService } from '@/services/user.service';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
@@ -11,11 +20,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Dialog } from '@/components/ui/Dialog';
 import { Textarea } from '@/components/ui/Textarea';
 import { Alert } from '@/components/common/Alert';
-import LeadBulkActionsBar, {
-  BulkStatusOption,
-  BulkVendorOption,
-  LeadBulkAction,
-} from '@/components/crm/LeadBulkActionsBar';
+import LeadBulkActionsBar from '@/components/crm/LeadBulkActionsBar';
+import type { BulkStatusOption, BulkVendorOption, LeadBulkAction } from '@/components/crm/LeadBulkActionsBar';
 import { getStatusBadgeVariant, normalizeStatusLabel } from '@/utils/badges';
 import { formatDate } from '@/utils/helpers';
 import { useToast } from '@/components/common/Toasts';
@@ -35,20 +41,45 @@ const DEFAULT_FILTERS: FiltersState = {
 };
 
 const FALLBACK_STATUSES: BulkStatusOption[] = [
-  { id: 1, label: 'Prospecto' },
-  { id: 2, label: 'En gestion' },
-  { id: 3, label: 'Ganado' },
-  { id: 4, label: 'Perdido' },
+  { id: 1, label: 'Pendiente' },
+  { id: 2, label: 'Asignado' },
+  { id: 3, label: 'Contactado' },
+  { id: 4, label: 'En gestion' },
+  { id: 5, label: 'Perdido' },
+  { id: 6, label: 'Ganado' },
 ];
-const REQUIRED_IMPORT_FIELDS: Array<{ key: string; label: string; required: boolean }> = [
+
+const getApiErrorMessage = (error: unknown) => {
+  if (error && typeof error === 'object') {
+    const maybeResponse = (error as { response?: { data?: unknown } }).response;
+    const data = maybeResponse?.data as { message?: unknown };
+    if (typeof data?.message === 'string' && data.message.trim()) {
+      return data.message;
+    }
+    if (Array.isArray(data?.message)) {
+      return data.message.join(', ');
+    }
+    const fallback = (error as { message?: string }).message;
+    if (typeof fallback === 'string' && fallback.trim()) {
+      return fallback;
+    }
+  }
+  return 'Ocurrió un error inesperado. Inténtalo nuevamente.';
+};
+const REQUIRED_IMPORT_FIELDS: Array<{
+  key: string;
+  label: string;
+  required: boolean;
+  optionalLabel?: string;
+}> = [
+  { key: 'dni', label: 'DNI', required: false},
   { key: 'nombres', label: 'Nombres', required: true },
-  { key: 'apellidos', label: 'Apellidos', required: true },
-  { key: 'email', label: 'Email', required: false },
-  { key: 'telefono', label: 'Telefono', required: false },
-  { key: 'dni', label: 'DNI', required: false },
-  { key: 'ciudad', label: 'Ciudad', required: false },
-  { key: 'ocupacion', label: 'Ocupacion', required: false },
-  { key: 'descripcion', label: 'Descripcion', required: false },
+  { key: 'apellidos', label: 'Apellidos', required: false},
+  { key: 'telefono', label: 'Telefono', required: true },
+  { key: 'email', label: 'Email', required: false},
+  { key: 'ciudad', label: 'Ciudad', required: false},
+  { key: 'ocupacion', label: 'Ocupacion', required: false},
+  { key: 'descripcion', label: 'Descripcion', required: false},
 ];
 
 
@@ -66,8 +97,8 @@ const getInitials = (value?: string | null) => {
 const buildVendorLabel = (nombres?: string | null, apellidos?: string | null, email?: string | null) => {
   const fullName = `${nombres ?? ''} ${apellidos ?? ''}`.trim();
   const initials = getInitials(fullName || email || '');
-  if (!fullName) return `${initials}${email ? ` · ${email}` : ''}`;
-  return `${initials} · ${fullName}`;
+  if (!fullName) return `${initials}${email ? ` Â· ${email}` : ''}`;
+  return `${initials} Â· ${fullName}`;
 };
 
 const computeUnassignedDuration = (createdAt?: string, assignedAt?: string | null) => {
@@ -148,6 +179,147 @@ const extractVendorOptions = (raw: any): BulkVendorOption[] => {
 
 const normalizeLeads = (raw: any): Lead[] => unwrapLeadCollection<Lead>(raw);
 
+type ImportReportPanelProps = {
+  job: LeadImportJob;
+  isOpen: boolean;
+  isLoading: boolean;
+  onToggle: () => void;
+  onDismiss: () => void;
+};
+
+const buildImportRowEntries = (job: LeadImportJob) => {
+  if (!job.total) return [];
+  const rowErrors = (job.errors ?? []).filter((entry) => (entry.row ?? 0) >= 2);
+  const errorMap = new Map<number, string[]>();
+  rowErrors.forEach((entry) => {
+    if (entry.row) {
+      errorMap.set(entry.row, entry.issues ?? []);
+    }
+  });
+  return Array.from({ length: job.total }, (_, index) => {
+    const rowNumber = index + 2;
+    return { rowNumber, issues: errorMap.get(rowNumber) ?? null };
+  });
+};
+
+const ImportReportPanel = ({
+  job,
+  isOpen,
+  isLoading,
+  onToggle,
+  onDismiss,
+}: ImportReportPanelProps) => {
+  const summaryLabel = job.total
+    ? `${job.created} de ${job.total} leads importados. Errores: ${job.failed}`
+    : 'La importación no procesó filas. Revisa los errores detectados.';
+  const startedLabel = job.startedAt
+    ? new Date(job.startedAt).toLocaleString()
+    : new Date(job.finishedAt ?? Date.now()).toLocaleString();
+  const statusLabel = job.status === 'completed' ? 'Completada' : 'Fallida';
+  const statusClass =
+    job.status === 'completed' ? 'text-emerald-600 bg-emerald-50' : 'text-error-600 bg-error-50';
+  const entries = buildImportRowEntries(job);
+  const generalIssues = (job.errors ?? []).filter((entry) => !entry.row || entry.row < 2);
+
+  return (
+    <div className="rounded-lg border border-border-subtle bg-surface shadow-sm">
+      <div className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex flex-1 items-start gap-3 text-left"
+        >
+          <ChevronRight
+            className={`mt-1 h-4 w-4 text-content-muted transition-transform ${isOpen ? 'rotate-90' : ''}`}
+          />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-content">Resultado de importación</p>
+            <p className="text-xs text-content-muted">{summaryLabel}</p>
+            <p className="text-xs text-content-muted">
+              ID: {job.importId} · Inicio: {startedLabel}
+            </p>
+          </div>
+        </button>
+        <div className="flex items-center gap-3">
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClass}`}>
+            {statusLabel}
+          </span>
+          <button
+            type="button"
+            className="text-sm font-medium text-primary-600 hover:underline"
+            onClick={onDismiss}
+          >
+            Ocultar
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-border-subtle px-4 py-3">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-content-muted">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Consultando estado...</span>
+            </div>
+          ) : (
+            <>
+              <div className="mb-3 grid gap-2 text-xs text-content-muted sm:grid-cols-2 lg:grid-cols-4">
+                <span>
+                  <span className="font-semibold text-content">Procesadas:</span>{' '}
+                  {job.processed}/{job.total}
+                </span>
+                <span>
+                  <span className="font-semibold text-content">Creadas:</span> {job.created}
+                </span>
+                <span>
+                  <span className="font-semibold text-content">Errores:</span> {job.failed}
+                </span>
+                <span>
+                  <span className="font-semibold text-content">Import ID:</span> {job.importId}
+                </span>
+              </div>
+              {generalIssues.length ? (
+                <div className="mb-3 rounded-md border border-error-200 bg-error-50 px-3 py-2 text-sm text-error-700">
+                  {generalIssues.map((error, index) => (
+                    <p key={`general-${index}`}>
+                      {error.row && error.row >= 2 ? `Fila ${error.row}: ` : ''}
+                      {error.issues.join(', ')}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              {entries.length ? (
+                <div className="max-h-64 overflow-auto rounded-md border border-border-subtle">
+                  <ul className="divide-y divide-border-subtle text-sm">
+                    {entries.map((entry) => (
+                      <li key={`import-row-${entry.rowNumber}`} className="flex items-start gap-3 p-3">
+                        {entry.issues ? (
+                          <XCircle className="mt-0.5 h-4 w-4 text-error-500" />
+                        ) : (
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
+                        )}
+                        <div>
+                          <p className="font-medium text-content">Fila {entry.rowNumber}</p>
+                          <p className="text-xs text-content-muted">
+                            {entry.issues ? entry.issues.join('; ') : 'Lead creado correctamente.'}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-sm text-content-muted">
+                  No hay filas detalladas para esta importación. Revisa los mensajes generales.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const LeadsAdmin = () => {
   const { push } = useToast();
   const queryClient = useQueryClient();
@@ -165,7 +337,11 @@ export const LeadsAdmin = () => {
   const [importError, setImportError] = useState<string | null>(null);
   const [isUploadingImport, setUploadingImport] = useState(false);
   const [isConfirmingImport, setConfirmingImport] = useState(false);
+  const [activeImportJob, setActiveImportJob] = useState<LeadImportJob | null>(null);
   const [isDownloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [importReport, setImportReport] = useState<LeadImportJob | null>(null);
+  const [isImportReportOpen, setImportReportOpen] = useState(false);
+  const [isImportReportLoading, setImportReportLoading] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
@@ -174,6 +350,8 @@ export const LeadsAdmin = () => {
     estadoId: '',
     descripcion: '',
   });
+  const importJobHandledRef = useRef<Record<string, LeadImportJobStatus | undefined>>({});
+  const isImportProcessing = activeImportJob?.status === 'pending' || activeImportJob?.status === 'processing';
 
   const companyId = user?.companyId ?? null;
 
@@ -208,6 +386,15 @@ export const LeadsAdmin = () => {
     return campaignOptions.find((option) => option.value === selectedCampaignId)?.label ?? '';
   }, [campaignOptions, selectedCampaignId]);
   const canUploadFile = hasCampaignOptions;
+  const importProgressPercent = useMemo(() => {
+    if (!activeImportJob || !activeImportJob.total) return 0;
+    return Math.min(100, Math.round((activeImportJob.processed / activeImportJob.total) * 100));
+  }, [activeImportJob]);
+  const importProgressSummary = useMemo(() => {
+    if (!activeImportJob) return '';
+    if (!activeImportJob.total) return 'Preparando archivo...';
+    return `${activeImportJob.processed}/${activeImportJob.total} filas procesadas`;
+  }, [activeImportJob]);
 
   const resetImportState = () => {
     setImportPreview(null);
@@ -216,28 +403,73 @@ export const LeadsAdmin = () => {
     setImportError(null);
     setUploadingImport(false);
     setConfirmingImport(false);
+    setActiveImportJob(null);
+    importJobHandledRef.current = {};
   };
 
+  const handleDismissImportReport = () => {
+    setImportReport(null);
+    setImportReportOpen(false);
+  };
+
+  const loadImportReport = useCallback(async (job: LeadImportJob) => {
+    setImportReportLoading(true);
+    try {
+      const latest = await LeadService.getImportProgress(job.importId);
+      setImportReport(latest);
+      setImportReportOpen(true);
+    } catch {
+      setImportReport(job);
+      setImportReportOpen(true);
+    } finally {
+      setImportReportLoading(false);
+    }
+  }, []);
+
   const handleImportDialogChange = (open: boolean) => {
+    if (!open && isImportProcessing) return;
     setImportDialogOpen(open);
     if (!open) resetImportState();
   };
 
   const handleImportFile = async (file?: File) => {
     if (!file) return;
+    setActiveImportJob(null);
+    importJobHandledRef.current = {};
     setUploadingImport(true);
     setImportError(null);
     try {
       const preview = await LeadService.previewImport(file);
       setImportPreview(preview);
       setHeaderMapping(preview.suggestedMapping || {});
-    } catch {
-      setImportError('No se pudo procesar el archivo. Verifica el formato e intenta nuevamente.');
+    } catch (error) {
+      setImportError(getApiErrorMessage(error));
     } finally {
       setUploadingImport(false);
     }
   };
 
+  const handleImportJobResult = useCallback(
+    async (job: LeadImportJob) => {
+      if (job.status === 'completed') {
+        await loadImportReport(job);
+        resetImportState();
+        setImportDialogOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['crm-admin-leads'] });
+        return;
+      }
+      if (job.status === 'failed') {
+        await loadImportReport(job);
+        const summary =
+          job.errors
+            .slice(0, 3)
+            .map((item) => `Fila ${item.row || '?'}: ${item.issues.join(', ')}`)
+            .join(' | ') || 'La importaci�n fall�. Revisa el archivo e int�ntalo nuevamente.';
+        setImportError(summary);
+      }
+    },
+    [loadImportReport, queryClient, resetImportState, setImportDialogOpen],
+  );
   const handleImportFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     void handleImportFile(file);
@@ -249,9 +481,9 @@ export const LeadsAdmin = () => {
   };
 
   const handleConfirmImport = async () => {
-    if (!importPreview) return;
+    if (!importPreview || isImportProcessing) return;
     if (!selectedCampaignId) {
-      setImportError('Selecciona una campaña para continuar.');
+      setImportError('Selecciona una campaÃ±a para continuar.');
       return;
     }
     const missing = REQUIRED_IMPORT_FIELDS.filter((field) => field.required && !headerMapping[field.key]);
@@ -263,25 +495,39 @@ export const LeadsAdmin = () => {
     setImportError(null);
     try {
       const actorLabel = (user?.email || `Usuario ${user?.id ?? ''}`).trim();
-      const result = await LeadService.confirmImport({
+      const job = await LeadService.confirmImport({
         importId: importPreview.importId,
         mapping: headerMapping,
         campaignId: Number(selectedCampaignId),
         actorLabel: actorLabel || undefined,
       });
-      push({
-        title: 'Importación completada',
-        description: `Leads creados: ${result.created} | Errores: ${result.failed}`,
-      });
-      resetImportState();
-      setImportDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['crm-admin-leads'] });
-    } catch {
-      setImportError('No se pudo completar la importación. Inténtalo nuevamente.');
+      setActiveImportJob(job);
+    } catch (error) {
+      setImportError(getApiErrorMessage(error));
     } finally {
       setConfirmingImport(false);
     }
   };
+
+  useEffect(() => {
+    if (!activeImportJob) return;
+    if (activeImportJob.status === 'completed' || activeImportJob.status === 'failed') {
+      const handledStatus = importJobHandledRef.current[activeImportJob.importId];
+      if (handledStatus === activeImportJob.status) return;
+      importJobHandledRef.current[activeImportJob.importId] = activeImportJob.status;
+      void handleImportJobResult(activeImportJob);
+      return;
+    }
+    const intervalId = window.setInterval(async () => {
+      try {
+        const nextJob = await LeadService.getImportProgress(activeImportJob.importId);
+        setActiveImportJob(nextJob);
+      } catch {
+        // ignore polling errors
+      }
+    }, 1500);
+    return () => window.clearInterval(intervalId);
+  }, [activeImportJob, handleImportJobResult]);
 
   const handleDownloadTemplate = async () => {
     setDownloadingTemplate(true);
@@ -298,7 +544,7 @@ export const LeadsAdmin = () => {
     } catch {
       push({
         title: 'No se pudo descargar la plantilla',
-        description: 'Revisa tu conexión e intenta nuevamente.',
+        description: 'Revisa tu conexiÃ³n e intenta nuevamente.',
         variant: 'danger',
       });
     } finally {
@@ -491,12 +737,21 @@ export const LeadsAdmin = () => {
           </Button>
         </div>
       </header>
+      {importReport ? (
+        <ImportReportPanel
+          job={importReport}
+          isOpen={isImportReportOpen}
+          isLoading={isImportReportLoading}
+          onToggle={() => setImportReportOpen((prev) => !prev)}
+          onDismiss={handleDismissImportReport}
+        />
+      ) : null}
 
       <div className="flex flex-wrap gap-3">
         <div className="w-full max-w-xs">
           <Input
             label="Buscar"
-            placeholder="Nombre, correo, campaña..."
+            placeholder="Nombre, correo, campaÃ±a..."
             value={filters.search}
             onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
             autoComplete="off"
@@ -555,7 +810,7 @@ export const LeadsAdmin = () => {
                 />
               </TableHead>
               <TableHead>Lead</TableHead>
-              <TableHead>Campaña</TableHead>
+              <TableHead>CampaÃ±a</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Asignado a</TableHead>
               <TableHead>Origen</TableHead>
@@ -602,7 +857,7 @@ export const LeadsAdmin = () => {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{lead.campania?.nombre ?? 'Sin campaña'}</TableCell>
+                  <TableCell>{lead.campania?.nombre ?? 'Sin campaÃ±a'}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusBadgeVariant(lead.estado?.nombre ?? lead.estado)}>
                       {normalizeStatusLabel(lead.estado?.nombre ?? lead.estado, 'Pendiente')}
@@ -666,17 +921,17 @@ export const LeadsAdmin = () => {
             <>
               <div className="space-y-2">
                 {importCampaignsQuery.isLoading ? (
-                  <p className="text-xs text-content-muted">Cargando campañas disponibles...</p>
+                  <p className="text-xs text-content-muted">Cargando campaÃ±as disponibles...</p>
                 ) : !hasCampaignOptions ? (
                   <Alert
                     variant="warning"
-                    title="No hay campañas activas"
-                    description="Crea una campaña para poder importar leads."
+                    title="No hay campaÃ±as activas"
+                    description="Crea una campaÃ±a para poder importar leads."
                     onClose={() => handleImportDialogChange(false)}
                   />
                 ) : (
                   <p className="text-xs text-content-muted">
-                    Luego de subir el archivo podrás elegir la campaña destino durante el mapeo.
+                    Luego de subir el archivo podrÃ¡s elegir la campaÃ±a destino durante el mapeo.
                   </p>
                 )}
               </div>
@@ -692,7 +947,7 @@ export const LeadsAdmin = () => {
                 {importError ? (
                   <p className="text-sm text-error-500">{importError}</p>
                 ) : (
-                  <p className="text-xs text-content-muted">Formatos soportados: CSV, XLSX, XLS (máx. 5 MB).</p>
+                  <p className="text-xs text-content-muted">Formatos soportados: CSV, XLSX, XLS (mÃ¡x. 5 MB).</p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -710,68 +965,115 @@ export const LeadsAdmin = () => {
                 <div>
                   <p className="text-sm font-medium text-content">Vista previa detectada</p>
                   <p className="text-xs text-content-muted">
-                    Ajusta el mapeo de columnas antes de confirmar la importación.
+                    Ajusta el mapeo de columnas antes de confirmar la importaciÃ³n.
                   </p>
                 </div>
-                <Button type="button" variant="ghost" onClick={resetImportState}>
+                <Button type="button" variant="ghost" onClick={resetImportState} disabled={isImportProcessing}>
                   Subir otro archivo
                 </Button>
               </div>
-              <div className="space-y-2 rounded-lg border border-border-subtle p-3">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm font-medium text-content">Campaña destino</p>
-                  {selectedCampaignLabel ? (
-                    <span className="text-xs text-content-muted">Seleccionada: {selectedCampaignLabel}</span>
+              {activeImportJob ? (
+                <div className="space-y-3 rounded-lg border border-border-subtle p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-content">Procesando importaciÃ³n</p>
+                      <p className="text-xs text-content-muted">{importProgressSummary}</p>
+                    </div>
+                    <span className="text-sm font-semibold text-content">{importProgressPercent}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-border-subtle">
+                    <div
+                      className="h-2 rounded-full bg-primary transition-all"
+                      style={{ width: `${importProgressPercent}%` }}
+                    />
+                  </div>
+                  <div className="flex flex-wrap justify-between text-xs text-content-muted">
+                    <span>
+                      Creados: <span className="font-semibold text-content">{activeImportJob.created}</span>
+                    </span>
+                    <span>
+                      Con errores: <span className="font-semibold text-content">{activeImportJob.failed}</span>
+                    </span>
+                  </div>
+                  {activeImportJob.errors.length ? (
+                    <div className="rounded-md bg-surface-muted/60 p-3">
+                      <p className="text-xs font-semibold uppercase text-content-muted">Errores recientes</p>
+                      <ul className="mt-2 space-y-1 text-xs text-content">
+                        {activeImportJob.errors.slice(0, 3).map((error, index) => (
+                          <li key={`import-error-${index}`}>
+                            Fila {error.row || '?'}: {error.issues.join(', ')}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ) : null}
                 </div>
-                <Select
-                  label="Campaña"
-                  required
-                  value={selectedCampaignId}
-                  onChange={(event) => setSelectedCampaignId(event.target.value)}
-                  disabled={importCampaignsQuery.isLoading || !hasCampaignOptions}
-                  options={[
-                    { label: 'Selecciona una campaña', value: '' },
-                    ...campaignOptions,
-                  ]}
-                />
-                {importCampaignsQuery.isLoading ? (
-                  <p className="text-xs text-content-muted">Actualizando campañas...</p>
-                ) : !hasCampaignOptions ? (
-                  <Alert
-                    variant="warning"
-                    title="No hay campañas activas"
-                    description="Crea una campaña para poder confirmar la importación."
-                    onClose={() => handleImportDialogChange(false)}
-                  />
-                ) : (
-                  <p className="text-xs text-content-muted">
-                    Selecciona la campaña que recibirá todos los leads de esta importación.
-                  </p>
-                )}
-              </div>
-              <div className="space-y-3">
-                {REQUIRED_IMPORT_FIELDS.map((field) => (
-                  <div key={field.key} className="flex flex-col gap-1 sm:flex-row sm:items-center">
-                    <span className="w-full text-sm font-medium text-content sm:w-48">
-                      {field.label}
-                      {field.required ? <span className="text-error-500"> *</span> : null}
-                    </span>
-                    <select
-                      className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
-                      value={headerMapping[field.key] ?? ''}
-                      onChange={(event) => handleMappingChange(field.key, event.target.value)}
-                    >
-                      <option value="">Selecciona una columna</option>
-                      {importPreview.headers.map((header) => (
-                        <option key={`${field.key}-${header}`} value={header}>
-                          {header}
-                        </option>
-                      ))}
-                    </select>
+              ) : (
+                <>
+                  <div className="space-y-2 rounded-lg border border-border-subtle p-3">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm font-medium text-content">CampaÃ±a destino</p>
+                      {selectedCampaignLabel ? (
+                        <span className="text-xs text-content-muted">Seleccionada: {selectedCampaignLabel}</span>
+                      ) : null}
+                    </div>
+                    <Select
+                      label="CampaÃ±a"
+                      required
+                      value={selectedCampaignId}
+                      onChange={(event) => setSelectedCampaignId(event.target.value)}
+                      disabled={importCampaignsQuery.isLoading || !hasCampaignOptions || isImportProcessing}
+                      options={[
+                        { label: 'Selecciona una campaÃ±a', value: '' },
+                        ...campaignOptions,
+                      ]}
+                    />
+                    {importCampaignsQuery.isLoading ? (
+                      <p className="text-xs text-content-muted">Actualizando campaÃ±as...</p>
+                    ) : !hasCampaignOptions ? (
+                      <Alert
+                        variant="warning"
+                        title="No hay campaÃ±as activas"
+                        description="Crea una campaÃ±a para poder confirmar la importaciÃ³n."
+                        onClose={() => handleImportDialogChange(false)}
+                      />
+                    ) : (
+                      <p className="text-xs text-content-muted">
+                        Selecciona la campaÃ±a que recibirÃ¡ todos los leads de esta importaciÃ³n.
+                      </p>
+                    )}
                   </div>
-                ))}
-              </div>
+                  <div className="space-y-3">
+                    {REQUIRED_IMPORT_FIELDS.map((field) => (
+                      <div key={field.key} className="flex flex-col gap-1 sm:flex-row sm:items-center">
+                        <span className="w-full text-sm font-medium text-content sm:w-48">
+                          {field.label}
+                          {field.required ? (
+                            <span className="text-error-500"> *</span>
+                          ) : field.optionalLabel ? (
+                            <span className="ml-1 text-xs font-normal text-content-muted">
+                              ({field.optionalLabel})
+                            </span>
+                          ) : null}
+                        </span>
+                        <select
+                          className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
+                          value={headerMapping[field.key] ?? ''}
+                          onChange={(event) => handleMappingChange(field.key, event.target.value)}
+                          disabled={isImportProcessing}
+                        >
+                          <option value="">Selecciona una columna</option>
+                          {importPreview.headers.map((header) => (
+                            <option key={`${field.key}-${header}`} value={header}>
+                              {header}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
               <div className="space-y-2 rounded-lg border border-border-subtle p-3">
                 <p className="text-sm font-medium text-content">Muestra de filas</p>
                 <div className="max-h-60 overflow-auto">
@@ -801,11 +1103,16 @@ export const LeadsAdmin = () => {
               </div>
               {importError ? <p className="text-sm text-error-500">{importError}</p> : null}
               <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={() => handleImportDialogChange(false)}>
+                <Button type="button" variant="ghost" onClick={() => handleImportDialogChange(false)} disabled={isImportProcessing}>
                   Cancelar
                 </Button>
-                <Button type="button" onClick={handleConfirmImport} isLoading={isConfirmingImport} disabled={!selectedCampaignId}>
-                  Confirmar importación
+                <Button
+                  type="button"
+                  onClick={handleConfirmImport}
+                  isLoading={isConfirmingImport || isImportProcessing}
+                  disabled={!selectedCampaignId || isImportProcessing}
+                >
+                  {isImportProcessing ? 'Procesando...' : 'Confirmar importaciÃ³n'}
                 </Button>
               </div>
             </div>
@@ -837,3 +1144,6 @@ export const LeadsAdmin = () => {
 };
 
 export default LeadsAdmin;
+
+
+

@@ -71,11 +71,18 @@ export type LeadImportPreview = {
   suggestedMapping: Record<string, string>;
 };
 
-export type LeadImportResult = {
+export type LeadImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export type LeadImportJob = {
+  importId: string;
+  status: LeadImportJobStatus;
   total: number;
+  processed: number;
   created: number;
   failed: number;
   errors: Array<{ row: number; issues: string[] }>;
+  startedAt?: number;
+  finishedAt?: number;
 };
 
 const mapLeadPayload = (payload: Partial<LeadDraft>) => {
@@ -128,6 +135,37 @@ const normalizeParams = (params: Record<string, unknown> = {}) =>
         return [key, value];
       }),
   );
+
+const mergeLeadCollections = (...collections: Lead[][]): Lead[] => {
+  const byId = new Map<number, Lead>();
+  collections.forEach((collection) => {
+    collection.forEach((lead) => {
+      if (!lead || typeof lead.id_lead !== 'number') return;
+      const current = byId.get(lead.id_lead);
+      if (!current) {
+        byId.set(lead.id_lead, lead);
+        return;
+      }
+      const merged: Lead = {
+        ...current,
+        ...lead,
+      };
+      merged.fecha_creacion = lead.fecha_creacion ?? current.fecha_creacion;
+      merged.estado = lead.estado ?? current.estado ?? null;
+      merged.campania = lead.campania ?? current.campania ?? null;
+      merged.asignaciones =
+        lead.asignaciones && lead.asignaciones.length
+          ? lead.asignaciones
+          : current.asignaciones;
+      byId.set(lead.id_lead, merged);
+    });
+  });
+  return Array.from(byId.values()).sort((a, b) => {
+    const dateA = new Date(a.fecha_creacion ?? 0).getTime();
+    const dateB = new Date(b.fecha_creacion ?? 0).getTime();
+    return dateB - dateA;
+  });
+};
 
 export const LeadService = {
   async create(payload: LeadDraft) {
@@ -250,7 +288,11 @@ export const LeadService = {
     actorLabel?: string;
   }) {
     const { data } = await api.post('/leads/import/confirm', payload);
-    return data as LeadImportResult;
+    return data as LeadImportJob;
+  },
+  async getImportProgress(importId: string) {
+    const { data } = await api.get(`/leads/import/status/${importId}`);
+    return data as LeadImportJob;
   },
   // Descarga la plantilla oficial de importación usando el token del usuario
   async downloadImportTemplate() {
@@ -258,5 +300,21 @@ export const LeadService = {
       responseType: 'blob',
     });
     return data as Blob;
+  },
+  async listVendorUniverse(options: {
+    filters?: Record<string, unknown>;
+    includeEmpresa?: boolean;
+    freelerUserId?: number | null;
+  } = {}) {
+    const { filters = {}, includeEmpresa = true, freelerUserId } = options;
+    const [assignedRaw, companyRaw, freelerRaw] = await Promise.all([
+      this.listAssignedToMe(filters),
+      includeEmpresa ? this.listByEmpresa(filters) : Promise.resolve(null),
+      freelerUserId ? this.listMine(freelerUserId, filters) : Promise.resolve(null),
+    ]);
+    const assigned = unwrapLeadCollection<Lead>(assignedRaw);
+    const company = unwrapLeadCollection<Lead>(companyRaw);
+    const freeler = unwrapLeadCollection<Lead>(freelerRaw);
+    return mergeLeadCollections(assigned, company, freeler);
   },
 };

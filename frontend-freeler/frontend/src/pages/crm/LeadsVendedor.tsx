@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lead, LeadService, unwrapLeadCollection } from '@/services/lead.service';
+import { LeadService, unwrapLeadCollection } from '@/services/lead.service';
+import type { Lead } from '@/services/lead.service';
 import { useToast } from '@/components/common/Toasts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import LeadBulkActionsBar, {
+import LeadBulkActionsBar from '@/components/crm/LeadBulkActionsBar';
+import type {
   BulkStatusOption,
   BulkVendorOption,
   LeadBulkAction,
@@ -19,10 +21,12 @@ import { useAuth } from '@/store/auth';
 const FALLBACK_COLUMNS = ['Prospecto', 'En gestion', 'Ganado', 'Perdido'] as const;
 
 const FALLBACK_STATUSES: BulkStatusOption[] = [
-  { id: 1, label: 'Prospecto' },
-  { id: 2, label: 'En gestion' },
-  { id: 3, label: 'Ganado' },
-  { id: 4, label: 'Perdido' },
+  { id: 1, label: 'Pendiente' },
+  { id: 2, label: 'Asignado' },
+  { id: 3, label: 'Contactado' },
+  { id: 4, label: 'En gestion' },
+  { id: 5, label: 'Perdido' },
+  { id: 6, label: 'Ganado' },
 ];
 
 type FiltersState = {
@@ -60,8 +64,6 @@ const extractStatusOptions = (raw: any): BulkStatusOption[] => {
 
   return mapped.length ? mapped : FALLBACK_STATUSES;
 };
-
-const normalizeLeads = (raw: any): Lead[] => unwrapLeadCollection<Lead>(raw);
 
 const resolveStatusIdByName = (statuses: BulkStatusOption[], name: string) => {
   const match = statuses.find(
@@ -126,17 +128,21 @@ export const LeadsVendedor = () => {
 
   const leadsQuery = useQuery({
     queryKey: [
-      'crm-leads-assigned',
+      'crm-vendor-leads',
       user?.id ?? null,
+      user?.companyId ?? null,
+      user?.type ?? null,
       serverFilters.search ?? null,
       serverFilters.id_estado_lead ?? null,
       filters.campaignId,
     ],
     enabled: Boolean(user?.id),
-    queryFn: async () => {
-      const response = await LeadService.listAssignedToMe(serverFilters);
-      return normalizeLeads(response);
-    },
+    queryFn: () =>
+      LeadService.listVendorUniverse({
+        filters: serverFilters,
+        includeEmpresa: user?.type === 'empresa',
+        freelerUserId: user?.type === 'freeler' ? user.id ?? null : null,
+      }),
   });
 
   const statusesQuery = useQuery({
@@ -248,7 +254,7 @@ export const LeadsVendedor = () => {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-leads-assigned'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-vendor-leads'] });
     },
     onError: () => {
       push({
@@ -266,7 +272,7 @@ export const LeadsVendedor = () => {
       setSelectedIds([]);
       setSelectedAction(null);
       setSelectedStatusId(null);
-      queryClient.invalidateQueries({ queryKey: ['crm-leads-assigned'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-vendor-leads'] });
     },
     onError: () => {
       push({

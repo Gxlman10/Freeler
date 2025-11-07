@@ -7,7 +7,8 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { AuthService, SessionUser } from '@/services/auth.service';
+import { AuthService } from '@/services/auth.service';
+import type { SessionUser } from '@/services/auth.service';
 import { setAuthToken } from '@/services/api';
 
 type AuthContextValue = {

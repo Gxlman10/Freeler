@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Loader2 } from 'lucide-react';
-import { Lead, LeadDraft, LeadService } from '@/services/lead.service';
+import { LeadService } from '@/services/lead.service';
+import type { Lead, LeadDraft } from '@/services/lead.service';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';

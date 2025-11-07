@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { LeadService, unwrapLeadCollection } from '@/services/lead.service';
+import { LeadService } from '@/services/lead.service';
 import { KPI } from '@/components/common/KPI';
 import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -7,8 +7,14 @@ import { EmptyState } from '@/components/common/EmptyState';
 export const HomeVendedor = () => {
   const { user } = useAuth();
   const { data } = useQuery({
-    queryKey: ['crm-vendedor-leads'],
-    queryFn: () => LeadService.listAssignedToMe(),
+    queryKey: ['crm-vendedor-leads-summary', user?.id ?? null, user?.companyId ?? null, user?.type ?? null],
+    enabled: Boolean(user?.id),
+    queryFn: () =>
+      LeadService.listVendorUniverse({
+        filters: { limit: 250 },
+        includeEmpresa: user?.type === 'empresa',
+        freelerUserId: user?.type === 'freeler' ? user.id ?? null : null,
+      }),
   });
 
   if (!user) {
@@ -20,7 +26,7 @@ export const HomeVendedor = () => {
     );
   }
 
-  const leads = unwrapLeadCollection(data);
+  const leads = data ?? [];
   const activos = leads.filter((lead) => lead.estado?.nombre !== 'Ganado' && lead.estado?.nombre !== 'Perdido').length;
   const ganados = leads.filter((lead) => lead.estado?.nombre === 'Ganado').length;
 

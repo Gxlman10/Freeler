@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { CampaignService, Campaign } from '@/services/campaign.service';
+import { CampaignService } from '@/services/campaign.service';
+import type { Campaign } from '@/services/campaign.service';
 import { KPI } from '@/components/common/KPI';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { formatDate } from '@/utils/helpers';

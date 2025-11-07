@@ -1,5 +1,5 @@
 import { Dialog } from '@/components/ui/Dialog';
-import { Lead } from '@/services/lead.service';
+import type { Lead } from '@/services/lead.service';
 import { LeadForm } from './LeadForm';
 
 type LeadFormModalProps = {

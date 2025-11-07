@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LeadService, Lead, unwrapLeadCollection } from '@/services/lead.service';
+import { LeadService, unwrapLeadCollection } from '@/services/lead.service';
+import type { Lead } from '@/services/lead.service';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MiniChart } from '@/components/common/MiniChart';
 import { KPI } from '@/components/common/KPI';

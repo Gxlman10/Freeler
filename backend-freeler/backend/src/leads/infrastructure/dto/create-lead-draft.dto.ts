@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEmail,
@@ -11,12 +11,23 @@ import {
   Min,
 } from 'class-validator';
 
+const sanitizeOptionalString = ({ value }: { value: unknown }) => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
 export class CreateLeadDraftDto {
-  @ApiProperty({ example: 10 })
+  @ApiPropertyOptional({
+    example: 10,
+    description: 'ID del usuario freeler que crea el borrador (opcional para empresa).',
+  })
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  usuarioFreelerId!: number;
+  usuarioFreelerId?: number | null;
 
   @ApiPropertyOptional({ example: 5 })
   @IsOptional()
@@ -34,45 +45,49 @@ export class CreateLeadDraftDto {
   @Length(1, 255)
   origen!: string;
 
-  @ApiPropertyOptional({ example: 'Ana' })
-  @IsOptional()
+  @ApiProperty({ example: 'Ana' })
   @IsString()
   @Length(1, 255)
-  nombres?: string;
-  @ApiPropertyOptional({ example: 'Pérez' })
-  @IsOptional()
+  nombres!: string;
+  @ApiProperty({ example: 'Pérez' })
   @IsString()
   @Length(1, 255)
-  apellidos?: string;
+  apellidos!: string;
   @ApiPropertyOptional({ example: '71384562' })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  dni?: string;
+  dni?: string | null;
   @ApiPropertyOptional({ example: 'ana@example.com' })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsEmail()
   @MaxLength(255)
-  email?: string;
+  email?: string | null;
   @ApiPropertyOptional({ example: '+51987654321' })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  telefono?: string;
+  telefono?: string | null;
   @ApiPropertyOptional({ example: 'Estudiante' })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  ocupacion?: string;
+  ocupacion?: string | null;
   @ApiPropertyOptional({ example: 'Lima' })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  ciudad?: string;
+  ciudad?: string | null;
   @ApiPropertyOptional({ example: 'Interesado en plan premium' })
+  @Transform(sanitizeOptionalString)
   @IsOptional()
   @IsString()
-  descripcion?: string;
+  descripcion?: string | null;
 
   @ApiPropertyOptional({ example: false })
   @IsOptional()

@@ -15,7 +15,7 @@
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiConsumes, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/infrastructure/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/infrastructure/guards/roles.guard';
 import { Roles } from '../../shared/infrastructure/decorators/roles.decorator';
@@ -81,7 +81,64 @@ const leadImportMulterOptions: MulterOptions = {
   },
 };
 
+const isEmptyValue = (value: unknown) =>
+  value === undefined ||
+  value === null ||
+  (typeof value === 'string' && !value.trim());
+
+const ensureRequiredFieldsFilled = <T extends Record<string, unknown>>(
+  fields: Array<{ key: keyof T; label: string }>,
+  dto: T,
+) => {
+  const missing = fields
+    .map(({ key, label }) => ({
+      key,
+      label,
+      empty: isEmptyValue(dto[key]),
+    }))
+    .filter((item) => item.empty)
+    .map((item) => item.label);
+
+  if (missing.length) {
+    throw new BadRequestException({
+      message: 'REQUIRED_FIELDS_MISSING',
+      fields: missing,
+    });
+  }
+};
+
+const trimToNull = (value?: string | null) => {
+  if (typeof value !== 'string') return value ?? null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
+const sanitizeLeadPayload = (dto: CreateLeadDto) => ({
+  ...dto,
+  nombres: dto.nombres?.trim(),
+  apellidos: trimToNull(dto.apellidos),
+  telefono: dto.telefono?.trim(),
+  dni: trimToNull(dto.dni),
+  email: trimToNull(dto.email),
+  ocupacion: trimToNull(dto.ocupacion),
+  ciudad: trimToNull(dto.ciudad),
+  descripcion: trimToNull(dto.descripcion),
+});
+
+const sanitizeLeadDraftPayload = (dto: CreateLeadDraftDto) => ({
+  ...dto,
+  nombres: dto.nombres?.trim(),
+  apellidos: dto.apellidos?.trim(),
+  telefono: trimToNull(dto.telefono),
+  dni: trimToNull(dto.dni),
+  email: trimToNull(dto.email),
+  ocupacion: trimToNull(dto.ocupacion),
+  ciudad: trimToNull(dto.ciudad),
+  descripcion: trimToNull(dto.descripcion),
+});
+
 @ApiTags('leads')
+@ApiBearerAuth()
 @Controller('leads')
 export class LeadsController {
   constructor(
@@ -107,31 +164,76 @@ export class LeadsController {
   @ApiOkResponse({ description: 'Lead borrador creado' })
   @UseGuards(JwtAuthGuard)
   @Post('draft')
-  createDraft(
+  async createDraft(
     @Body() dto: CreateLeadDraftDto,
     @Req() req: { user?: { type?: string; sub?: number } },
   ) {
     const user = req.user;
-    if (user?.type !== 'freeler' || !user.sub) throw new ForbiddenException();
-    return this.createDraftUC.execute({
-      ...dto,
-      usuarioFreelerId: Number(user.sub),
-    });
+    const payload = sanitizeLeadDraftPayload(dto);
+    ensureRequiredFieldsFilled(
+      [
+        { key: 'nombres', label: 'Nombres' },
+        { key: 'apellidos', label: 'Apellidos' },
+      ],
+      payload,
+    );
+    if (user?.type === 'freeler' && user.sub) {
+      return this.createDraftUC.execute({
+        ...payload,
+        usuarioFreelerId: Number(user.sub),
+      });
+    }
+    if (user?.type === 'empresa' && user.sub) {
+      await this.permission.ensureEmpresaActor(Number(user.sub));
+      return this.createDraftUC.execute({
+        ...payload,
+        usuarioFreelerId: payload.usuarioFreelerId ?? null,
+      });
+    }
+    throw new ForbiddenException();
   }
 
   @ApiOperation({ summary: 'Crear lead completo (freeler)' })
   @UseGuards(JwtAuthGuard)
   @Post()
-  create(
+  async create(
     @Body() dto: CreateLeadDto,
     @Req() req: { user?: { type?: string; sub?: number } },
   ) {
     const user = req.user;
-    if (user?.type !== 'freeler' || !user.sub) throw new ForbiddenException();
-    return this.createUC.execute({
-      ...dto,
-      usuarioFreelerId: Number(user.sub),
-    });
+    const payload = sanitizeLeadPayload(dto);
+    if (user?.type === 'freeler' && user.sub) {
+      ensureRequiredFieldsFilled(
+        [
+          { key: 'nombres', label: 'Nombres' },
+          { key: 'apellidos', label: 'Apellidos' },
+          { key: 'telefono', label: 'Telefono' },
+          { key: 'dni', label: 'DNI' },
+          { key: 'ciudad', label: 'Ciudad' },
+          { key: 'descripcion', label: 'Descripcion' },
+        ],
+        payload,
+      );
+      return this.createUC.execute({
+        ...payload,
+        usuarioFreelerId: Number(user.sub),
+      });
+    }
+    if (user?.type === 'empresa' && user.sub) {
+      await this.permission.ensureEmpresaActor(Number(user.sub));
+      ensureRequiredFieldsFilled(
+        [
+          { key: 'nombres', label: 'Nombres' },
+          { key: 'telefono', label: 'Telefono' },
+        ],
+        payload,
+      );
+      return this.createUC.execute({
+        ...payload,
+        usuarioFreelerId: payload.usuarioFreelerId ?? null,
+      });
+    }
+    throw new ForbiddenException();
   }
 
   @ApiOperation({ summary: 'Actualizar lead' })
@@ -289,13 +391,21 @@ export class LeadsController {
     const fallbackActorLabel =
       actorFullName || actor.email || `Usuario ${actor.id_usuario_empresa}`;
     const actorLabel = dto.actorLabel ?? fallbackActorLabel;
-    return this.importService.processImport({
+    return this.importService.startAsyncImport({
       importId: dto.importId,
       mapping: dto.mapping,
       campaignId: dto.campaignId,
       actorLabel,
       usuarioEmpresaId: actor.id_usuario_empresa,
     });
+  }
+
+  @ApiOperation({ summary: 'Estado de importacion de leads' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'supervisor')
+  @Get('import/status/:id')
+  getImportStatus(@Param('id') importId: string) {
+    return this.importService.getJob(importId);
   }
 
   @ApiOperation({ summary: 'Detalle de lead' })

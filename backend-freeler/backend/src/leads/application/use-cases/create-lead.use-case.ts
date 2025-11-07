@@ -14,7 +14,7 @@ export class CreateLeadUseCase {
 
   execute(dto: CreateLeadDto) {
     return this.repo.create({
-      id_usuario_freeler: dto.usuarioFreelerId,
+      id_usuario_freeler: dto.usuarioFreelerId ?? null,
       id_campania: dto.id_campania,
       origen: dto.origen,
       nombres: dto.nombres,
