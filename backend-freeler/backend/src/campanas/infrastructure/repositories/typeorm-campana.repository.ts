@@ -24,7 +24,11 @@ export class TypeormCampanaRepository implements ICampanaRepository {
         'c.totalReferidos',
         'c.leads',
         'lead',
-        (qb) => qb.where('lead.estado_completo = :estado', { estado: true }),
+        (qb) =>
+          qb.where(
+            `lead.estado_completo = :estado AND (lead.id_usuario_freeler IS NOT NULL OR LOWER(COALESCE(lead.origen, '')) = :freelerOrigen)`,
+            { estado: true, freelerOrigen: 'freeler' },
+          ),
       )
       .where('c.id_campania = :id', { id })
       .getOne();
@@ -58,7 +62,11 @@ export class TypeormCampanaRepository implements ICampanaRepository {
       'c.totalReferidos',
       'c.leads',
       'lead',
-      (sub) => sub.where('lead.estado_completo = :estado', { estado: true }),
+      (sub) =>
+        sub.where(
+          `lead.estado_completo = :estado AND (lead.id_usuario_freeler IS NOT NULL OR LOWER(COALESCE(lead.origen, '')) = :freelerOrigen)`,
+          { estado: true, freelerOrigen: 'freeler' },
+        ),
     );
 
     if (search) {

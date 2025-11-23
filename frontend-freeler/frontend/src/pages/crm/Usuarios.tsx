@@ -11,6 +11,7 @@ import { useToast } from '@/components/common/Toasts';
 import { useAuth } from '@/store/auth';
 import { Badge } from '@/components/ui/Badge';
 import { getRoleBadgeVariant, getStatusBadgeVariant, normalizeStatusLabel } from '@/utils/badges';
+import { t } from '@/i18n';
 
 const ROLE_OPTIONS = [
   { value: 1, label: ROLE_LABELS[Role.ADMIN] },
@@ -65,8 +66,8 @@ export const Usuarios = () => {
     mutationFn: async () => {
       if (!user?.companyId) {
         push({
-          title: 'No se pudo identificar la empresa',
-          description: 'Vuelve a iniciar sesion e intenta registrar nuevamente.',
+          title: t('crmUsers.errors.missingCompanyTitle'),
+          description: t('crmUsers.errors.missingCompanyDescription'),
           variant: 'danger',
         });
         throw new Error('MISSING_COMPANY_ID');
@@ -83,15 +84,18 @@ export const Usuarios = () => {
       });
     },
     onSuccess: () => {
-      push({ title: 'Usuario creado', description: form.nombres || 'Cuenta registrada con exito.' });
+      const description = form.nombres
+        ? t('crmUsers.toasts.createSuccess.descriptionNamed', { name: form.nombres })
+        : t('crmUsers.toasts.createSuccess.description');
+      push({ title: t('crmUsers.toasts.createSuccess.title'), description });
       setDialogOpen(false);
       setForm(buildInitialForm());
       queryClient.invalidateQueries({ queryKey: usuariosQueryKey });
     },
     onError: () => {
       push({
-        title: 'No se pudo crear el usuario',
-        description: 'Revisa los datos e intenta nuevamente.',
+        title: t('crmUsers.toasts.createError.title'),
+        description: t('crmUsers.toasts.createError.description'),
         variant: 'danger',
       });
     },
@@ -100,7 +104,11 @@ export const Usuarios = () => {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!form.nombres.trim() || !form.apellidos.trim() || !form.email.trim() || !form.password.trim()) {
-      push({ title: 'Campos incompletos', description: 'Completa todos los campos obligatorios.', variant: 'warning' });
+      push({
+        title: t('crmUsers.errors.incompleteTitle'),
+        description: t('crmUsers.errors.createIncomplete'),
+        variant: 'warning',
+      });
       return;
     }
     createUser.mutate();
@@ -120,9 +128,13 @@ export const Usuarios = () => {
       });
     },
     onSuccess: (updated) => {
+      const updatedName = `${updated.nombres ?? ''} ${updated.apellidos ?? ''}`.trim();
+      const description = updatedName
+        ? t('crmUsers.toasts.updateSuccess.descriptionNamed', { name: updatedName })
+        : t('crmUsers.toasts.updateSuccess.description');
       push({
-        title: 'Usuario actualizado',
-        description: `${updated.nombres ?? ''} ${updated.apellidos ?? ''}`.trim() || 'Datos guardados.',
+        title: t('crmUsers.toasts.updateSuccess.title'),
+        description,
       });
       setEditDialogOpen(false);
       setEditingUser(null);
@@ -130,8 +142,8 @@ export const Usuarios = () => {
     },
     onError: () => {
       push({
-        title: 'No se pudo actualizar el usuario',
-        description: 'Intenta nuevamente.',
+        title: t('crmUsers.toasts.updateError.title'),
+        description: t('crmUsers.toasts.updateError.description'),
         variant: 'danger',
       });
     },
@@ -141,8 +153,8 @@ export const Usuarios = () => {
     event.preventDefault();
     if (!editForm.nombres.trim() || !editForm.apellidos.trim() || !editForm.email.trim()) {
       push({
-        title: 'Campos incompletos',
-        description: 'Completa al menos nombres, apellidos y correo.',
+        title: t('crmUsers.errors.incompleteTitle'),
+        description: t('crmUsers.errors.editIncomplete'),
         variant: 'warning',
       });
       return;
@@ -166,54 +178,54 @@ export const Usuarios = () => {
     <section className="space-y-6 text-content">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-content">Usuarios de empresa</h1>
-          <p className="text-sm text-content-muted">
-            Controla que usuarios tienen acceso al CRM y define su rol dentro de la empresa.
-          </p>
+          <h1 className="text-3xl font-semibold text-content">{t('crmUsers.title')}</h1>
+          <p className="text-sm text-content-muted">{t('crmUsers.subtitle')}</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>Nuevo usuario</Button>
+        <Button onClick={() => setDialogOpen(true)}>{t('crmUsers.actions.newUser')}</Button>
       </header>
 
       {isLoading ? (
-        <p className="text-sm text-content-muted">Cargando usuarios...</p>
+        <p className="text-sm text-content-muted">{t('crmUsers.loading')}</p>
       ) : (
-        <Table>
+        <Table minWidthClass="min-w-[680px]">
           <TableHeader>
             <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Correo</TableHead>
-              <TableHead>Rol</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
+              <TableHead>{t('crmUsers.table.name')}</TableHead>
+              <TableHead>{t('crmUsers.table.email')}</TableHead>
+              <TableHead>{t('crmUsers.table.role')}</TableHead>
+              <TableHead>{t('crmUsers.table.status')}</TableHead>
+              <TableHead className="text-right">{t('common.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {usuarios.map((usuario: any) => (
               <TableRow key={usuario.id_usuario_empresa}>
                 <TableCell>{`${usuario.nombres ?? ''} ${usuario.apellidos ?? ''}`.trim()}</TableCell>
-                <TableCell>{usuario.email ?? '-'}</TableCell>
+                <TableCell className="whitespace-pre-wrap break-words">{usuario.email ?? '-'}</TableCell>
                 <TableCell>
                   {(() => {
                     const role = mapBackendRole(usuario.rol?.nombre);
-                    const label = role ? ROLE_LABELS[role] : 'Sin rol';
+                    const label = role ? ROLE_LABELS[role] : t('crmUsers.table.noRole');
                     return <Badge variant={getRoleBadgeVariant(role)}>{label}</Badge>;
                   })()}
                 </TableCell>
                 <TableCell>
                   <Badge variant={getStatusBadgeVariant(usuario.estado)}>
-                    {normalizeStatusLabel(usuario.estado, 'Sin estado')}
+                    {normalizeStatusLabel(usuario.estado, t('crmUsers.table.noStatus'))}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" variant="outline" onClick={() => openEditDialog(usuario)}>
-                    Editar
+                    {t('crmUsers.actions.edit')}
                   </Button>
                 </TableCell>
               </TableRow>
             ))}
             {!usuarios.length && (
               <TableRow>
-                <TableCell colSpan={5}>Aun no hay usuarios registrados.</TableCell>
+                <TableCell colSpan={5} className="text-center text-content-muted">
+                  {t('crmUsers.table.empty')}
+                </TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -226,48 +238,52 @@ export const Usuarios = () => {
           setDialogOpen(open);
           if (!open) setForm(buildInitialForm());
         }}
-        title="Registrar usuario"
-        description="Completa la informacion para invitar a un miembro del equipo."
+        title={t('crmUsers.dialogs.createTitle')}
+        description={t('crmUsers.dialogs.createDescription')}
       >
         <form className="space-y-3" onSubmit={handleSubmit}>
           <Input
-            label="Nombres"
+            label={t('crmShell.fields.firstName')}
+            placeholder={t('crmUsers.form.firstNamePlaceholder')}
             required
             value={form.nombres}
             onChange={(event) => setForm((prev) => ({ ...prev, nombres: event.target.value }))}
           />
           <Input
-            label="Apellidos"
+            label={t('crmShell.fields.lastName')}
+            placeholder={t('crmUsers.form.lastNamePlaceholder')}
             required
             value={form.apellidos}
             onChange={(event) => setForm((prev) => ({ ...prev, apellidos: event.target.value }))}
           />
           <Input
-            label="Correo"
+            label={t('crmShell.fields.email')}
+            placeholder={t('crmUsers.form.emailPlaceholder')}
             type="email"
             required
             value={form.email}
             onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
           />
           <Input
-            label="Contrasena temporal"
+            label={t('crmUsers.form.tempPasswordLabel')}
+            placeholder={t('crmUsers.form.tempPasswordPlaceholder')}
             type="password"
             required
             value={form.password}
             onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
           />
           <Select
-            label="Rol"
+            label={t('crmShell.fields.role')}
             value={String(form.roleId)}
             onChange={(event) => setForm((prev) => ({ ...prev, roleId: Number(event.target.value) }))}
             options={ROLE_OPTIONS.map((option) => ({ label: option.label, value: String(option.value) }))}
           />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button type="submit" isLoading={createUser.isLoading}>
-              Registrar
+              {t('crmUsers.actions.register')}
             </Button>
           </div>
         </form>
@@ -282,48 +298,52 @@ export const Usuarios = () => {
             setEditForm(buildInitialForm());
           }
         }}
-        title="Editar usuario"
-        description="Actualiza la informacion del usuario seleccionado."
+        title={t('crmUsers.dialogs.editTitle')}
+        description={t('crmUsers.dialogs.editDescription')}
       >
         <form className="space-y-3" onSubmit={handleEditSubmit}>
           <Input
-            label="Nombres"
+            label={t('crmShell.fields.firstName')}
+            placeholder={t('crmUsers.form.firstNamePlaceholder')}
             required
             value={editForm.nombres}
             onChange={(event) => setEditForm((prev) => ({ ...prev, nombres: event.target.value }))}
           />
           <Input
-            label="Apellidos"
+            label={t('crmShell.fields.lastName')}
+            placeholder={t('crmUsers.form.lastNamePlaceholder')}
             required
             value={editForm.apellidos}
             onChange={(event) => setEditForm((prev) => ({ ...prev, apellidos: event.target.value }))}
           />
           <Input
-            label="Correo"
+            label={t('crmShell.fields.email')}
+            placeholder={t('crmUsers.form.emailPlaceholder')}
             type="email"
             required
             value={editForm.email}
             onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
           />
           <Input
-            label="Actualizar contrasena"
+            label={t('crmUsers.form.updatePasswordLabel')}
+            placeholder={t('crmUsers.form.updatePasswordPlaceholder')}
             type="password"
             value={editForm.password}
             onChange={(event) => setEditForm((prev) => ({ ...prev, password: event.target.value }))}
-            helperText="Deja en blanco para mantener la contrasena actual."
+            helperText={t('crmUsers.form.updatePasswordHelper')}
           />
           <Select
-            label="Rol"
+            label={t('crmShell.fields.role')}
             value={String(editForm.roleId)}
             onChange={(event) => setEditForm((prev) => ({ ...prev, roleId: Number(event.target.value) }))}
             options={ROLE_OPTIONS.map((option) => ({ label: option.label, value: String(option.value) }))}
           />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button type="submit" isLoading={updateUser.isLoading}>
-              Guardar cambios
+              {t('common.saveChanges')}
             </Button>
           </div>
         </form>

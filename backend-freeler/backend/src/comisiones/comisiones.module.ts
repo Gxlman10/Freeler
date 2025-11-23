@@ -9,9 +9,19 @@ import { PayCommissionUseCase } from './application/use-cases/pay-commission.use
 import { ListComisionesUseCase } from './application/use-cases/list-comisiones.use-case';
 import { FindComisionByIdUseCase } from './application/use-cases/find-comision-by-id.use-case';
 import { GetComisionesStatsUseCase } from './application/use-cases/get-comisiones-stats.use-case';
+import { UsuariosFreelerModule } from '../usuarios-freeler/usuarios-freeler.module';
+import CommissionAccountingService from './application/services/commission-accounting.service';
+import RequestCommissionPayoutUseCase from './application/use-cases/request-commission-payout.use-case';
+import RequestFreelerMassPayoutUseCase from './application/use-cases/request-freeler-mass-payout.use-case';
+import GetFreelerCommissionsUseCase from './application/use-cases/get-freeler-commissions.use-case';
+import { ComisionRetiroEntity } from './infrastructure/entities/comision-retiro.entity';
+import { CampanaEntity } from '../campanas/infrastructure/entities/campana.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ComisionEntity, EstadoComisionEntity])],
+  imports: [
+    TypeOrmModule.forFeature([ComisionEntity, EstadoComisionEntity, ComisionRetiroEntity, CampanaEntity]),
+    UsuariosFreelerModule,
+  ],
   controllers: [ComisionesController],
   providers: [
     { provide: COMISION_REPOSITORY, useClass: TypeormComisionRepository },
@@ -19,7 +29,11 @@ import { GetComisionesStatsUseCase } from './application/use-cases/get-comisione
     ListComisionesUseCase,
     FindComisionByIdUseCase,
     GetComisionesStatsUseCase,
+    CommissionAccountingService,
+    RequestCommissionPayoutUseCase,
+    RequestFreelerMassPayoutUseCase,
+    GetFreelerCommissionsUseCase,
   ],
-  exports: [COMISION_REPOSITORY],
+  exports: [COMISION_REPOSITORY, CommissionAccountingService],
 })
 export class ComisionesModule {}

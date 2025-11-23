@@ -55,6 +55,7 @@ import {
   LeadImportService,
   ImportUploadedFile,
 } from '../application/services/lead-import.service';
+import { ListLeadAssignmentHistoryUseCase } from '../application/use-cases/list-lead-assignment-history.use-case';
 
 const uploadTempDir = path.resolve(process.cwd(), 'tmp', 'lead-upload-buffer');
 if (!existsSync(uploadTempDir)) {
@@ -137,6 +138,52 @@ const sanitizeLeadDraftPayload = (dto: CreateLeadDraftDto) => ({
   descripcion: trimToNull(dto.descripcion),
 });
 
+type EmpresaRequestUser = {
+  type?: string;
+  sub?: number;
+  role?: string;
+};
+
+const isEmpresaVendorUser = (user?: EmpresaRequestUser) => {
+  if (!user) return false;
+  if (user.type !== 'empresa') return false;
+  if (typeof user.role !== 'string') return false;
+  return user.role.toLowerCase() === 'vendedor';
+};
+
+const sanitizeLeadForVendor = <T>(lead: T): T => {
+  if (!lead || typeof lead !== 'object' || Array.isArray(lead)) return lead;
+  const copy: Record<string, unknown> = { ...(lead as Record<string, unknown>) };
+  if ('origen' in copy) {
+    copy.origen = null;
+  }
+  if (copy.campania && typeof copy.campania === 'object') {
+    copy.campania = {
+      ...(copy.campania as Record<string, unknown>),
+      comision: null,
+    };
+  }
+  return copy as T;
+};
+
+const sanitizePayloadForVendor = <T>(payload: T, options?: { dropCampaigns?: boolean }): T => {
+  if (!payload) return payload;
+  if (Array.isArray(payload)) {
+    return payload.map((item) => sanitizeLeadForVendor(item)) as T;
+  }
+  if (typeof payload !== 'object') return payload;
+  const clone: Record<string, unknown> = { ...(payload as Record<string, unknown>) };
+  if (Array.isArray(clone.data)) {
+    clone.data = (clone.data as unknown[]).map((item) => sanitizeLeadForVendor(item));
+  } else if (clone.data && typeof clone.data === 'object') {
+    clone.data = sanitizeLeadForVendor(clone.data);
+  }
+  if (options?.dropCampaigns && 'campaigns' in clone) {
+    clone.campaigns = [];
+  }
+  return clone as T;
+};
+
 @ApiTags('leads')
 @ApiBearerAuth()
 @Controller('leads')
@@ -158,6 +205,7 @@ export class LeadsController {
     private readonly refreshCreatedAtUC: RefreshLeadCreatedAtUseCase,
     private readonly permission: LeadsPermissionService,
     private readonly importService: LeadImportService,
+    private readonly listAssignmentsHistoryUC: ListLeadAssignmentHistoryUseCase,
   ) {}
 
   @ApiOperation({ summary: 'Crear lead en borrador (freeler)' })
@@ -337,13 +385,18 @@ export class LeadsController {
   @ApiOperation({ summary: 'Leads por empresa (CRM)' })
   @UseGuards(JwtAuthGuard)
   @Get('by-empresa')
-  leadsByEmpresa(
-    @Req() req: { user?: { type?: string; sub?: number } },
+  async leadsByEmpresa(
+    @Req() req: { user?: { type?: string; sub?: number; role?: string } },
     @Query() q: FindLeadsDto,
   ) {
     const user = req.user;
     if (user?.type !== 'empresa' || !user.sub) throw new ForbiddenException();
-    return this.listByEmpresaUC.execute(Number(user.sub), q);
+    await this.permission.ensureEmpresaActor(Number(user.sub));
+    const response = await this.listByEmpresaUC.execute(Number(user.sub), q);
+    if (isEmpresaVendorUser(user)) {
+      return sanitizePayloadForVendor(response, { dropCampaigns: true });
+    }
+    return response;
   }
 
   @ApiOperation({ summary: 'Descargar plantilla de importacion de leads' })
@@ -408,6 +461,14 @@ export class LeadsController {
     return this.importService.getJob(importId);
   }
 
+  @ApiOperation({ summary: 'Historial de asignaciones del lead' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'supervisor')
+  @Get(':id/history')
+  getLeadHistory(@Param('id', ParseIntPipe) id: number) {
+    return this.listAssignmentsHistoryUC.execute(id);
+  }
+
   @ApiOperation({ summary: 'Detalle de lead' })
   @Get(':id')
   findById(@Param('id', ParseIntPipe) id: number) {
@@ -429,16 +490,21 @@ export class LeadsController {
   @ApiOperation({ summary: 'Leads asignados a mi (empresa)' })
   @UseGuards(JwtAuthGuard)
   @Get('assigned-to-me')
-  assignedToMe(
-    @Req() req: { user?: { type?: string; sub?: number } },
+  async assignedToMe(
+    @Req() req: { user?: { type?: string; sub?: number; role?: string } },
     @Query() q: FindLeadsDto,
   ) {
     const user = req.user;
     if (user?.type !== 'empresa' || !user.sub) throw new ForbiddenException();
-    return this.listByUserUC.execute({
+    await this.permission.ensureEmpresaActor(Number(user.sub));
+    const result = await this.listByUserUC.execute({
       ...q,
       asignado_a_usuario_empresa_id: Number(user.sub),
     });
+    if (isEmpresaVendorUser(user)) {
+      return sanitizePayloadForVendor(result);
+    }
+    return result;
   }
   @Get('ping')
   ping() {

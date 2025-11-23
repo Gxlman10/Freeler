@@ -25,6 +25,7 @@ import { ListEstadoLeadUseCase } from './application/use-cases/list-estado-lead.
 import { RefreshLeadCreatedAtUseCase } from './application/use-cases/refresh-lead-created-at.use-case';
 import { CampanaEntity } from '../campanas/infrastructure/entities/campana.entity';
 import { LeadImportService } from './application/services/lead-import.service';
+import { ListLeadAssignmentHistoryUseCase } from './application/use-cases/list-lead-assignment-history.use-case';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { LeadImportService } from './application/services/lead-import.service';
     ListEstadoLeadUseCase,
     RefreshLeadCreatedAtUseCase,
     LeadImportService,
+    ListLeadAssignmentHistoryUseCase,
   ],
 })
 export class LeadsModule {}

@@ -81,4 +81,9 @@ export const UserService = {
     const { data } = await api.get(`/usuarios-freeler/${id}`);
     return data as UsuarioFreeler;
   },
+
+  async updateUsuarioFreeler(id: number, payload: Partial<UsuarioFreeler>) {
+    const { data } = await api.patch(`/usuarios-freeler/${id}`, payload);
+    return data as UsuarioFreeler;
+  },
 };

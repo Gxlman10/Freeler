@@ -1,5 +1,6 @@
-﻿import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, ChevronRight, Loader2, XCircle } from 'lucide-react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { ArrowUpDown, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Loader2, XCircle } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LeadService, unwrapLeadCollection } from '@/services/lead.service';
 import type {
@@ -8,6 +9,8 @@ import type {
   LeadImportPreview,
   LeadImportJob,
   LeadImportJobStatus,
+  LeadAssignmentHistoryEntry,
+  LeadCampaignSummary,
 } from '@/services/lead.service';
 import { CampaignService } from '@/services/campaign.service';
 import type { Campaign } from '@/services/campaign.service';
@@ -18,26 +21,40 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Dialog } from '@/components/ui/Dialog';
-import { Textarea } from '@/components/ui/Textarea';
+import { TextArea } from '@/components/ui/TextArea';
+import { Switch } from '@/components/ui/Switch';
 import { Alert } from '@/components/common/Alert';
 import LeadBulkActionsBar from '@/components/crm/LeadBulkActionsBar';
 import type { BulkStatusOption, BulkVendorOption, LeadBulkAction } from '@/components/crm/LeadBulkActionsBar';
 import { getStatusBadgeVariant, normalizeStatusLabel } from '@/utils/badges';
 import { formatDate } from '@/utils/helpers';
+import { cn } from '@/utils/cn';
 import { useToast } from '@/components/common/Toasts';
 import { mapBackendRole, Role } from '@/utils/constants';
 import { useAuth } from '@/store/auth';
+import { LeadDetailDrawer } from '@/components/common/LeadDetailDrawer';
+import { Accordion } from '@/components/common/Accordion';
+import { Pagination } from '@/components/ui/Pagination';
+import { t } from '@/i18n';
 
 type FiltersState = {
   search: string;
   statusId: number | 'all';
   onlyUnassigned: boolean;
+  origin: string;
+  campaignId: string;
+  vendorId: string;
+  city: string;
 };
 
 const DEFAULT_FILTERS: FiltersState = {
   search: '',
   statusId: 'all',
   onlyUnassigned: false,
+  origin: 'all',
+  campaignId: 'all',
+  vendorId: 'all',
+  city: 'all',
 };
 
 const FALLBACK_STATUSES: BulkStatusOption[] = [
@@ -48,6 +65,48 @@ const FALLBACK_STATUSES: BulkStatusOption[] = [
   { id: 5, label: 'Perdido' },
   { id: 6, label: 'Ganado' },
 ];
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 25;
+
+type SortField = 'lead' | 'campania' | 'estado' | 'asignado' | 'origen' | 'creado' | 'unassigned';
+type SortConfig = {
+  field: SortField;
+  direction: 'asc' | 'desc';
+};
+
+type LeadContactFormState = {
+  nombres: string;
+  apellidos: string;
+  telefono: string;
+  email: string;
+  dni: string;
+  ocupacion: string;
+  ciudad: string;
+  descripcion: string;
+};
+
+type LeadOperationState = {
+  vendorId: string;
+  statusId: string;
+  active: boolean;
+};
+
+type TimelineItem = {
+  id: string;
+  dateLabel: string;
+  message: string;
+};
+
+type LeadsAdminVariant = 'admin' | 'vendor';
+
+type LeadsAdminProps = {
+  variant?: LeadsAdminVariant;
+  showOriginFilter?: boolean;
+  showOriginColumn?: boolean;
+  title?: string;
+  subtitle?: string;
+};
 
 const getApiErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object') {
@@ -64,7 +123,7 @@ const getApiErrorMessage = (error: unknown) => {
       return fallback;
     }
   }
-  return 'Ocurrió un error inesperado. Inténtalo nuevamente.';
+  return t('crmLeads.errors.unexpected');
 };
 const REQUIRED_IMPORT_FIELDS: Array<{
   key: string;
@@ -97,8 +156,8 @@ const getInitials = (value?: string | null) => {
 const buildVendorLabel = (nombres?: string | null, apellidos?: string | null, email?: string | null) => {
   const fullName = `${nombres ?? ''} ${apellidos ?? ''}`.trim();
   const initials = getInitials(fullName || email || '');
-  if (!fullName) return `${initials}${email ? ` Â· ${email}` : ''}`;
-  return `${initials} Â· ${fullName}`;
+  if (!fullName) return `${initials}${email ? ` · ${email}` : ''}`;
+  return `${initials} · ${fullName}`;
 };
 
 const computeUnassignedDuration = (createdAt?: string, assignedAt?: string | null) => {
@@ -113,6 +172,70 @@ const computeUnassignedDuration = (createdAt?: string, assignedAt?: string | nul
   const days = Math.floor(totalHours / 24);
   const remainingHours = totalHours % 24;
   return remainingHours ? `${days}d ${remainingHours}h` : `${days}d`;
+};
+
+const getActiveAssignmentEntity = (lead?: Lead | null) => {
+  if (!lead?.asignaciones?.length) return null;
+  return lead.asignaciones.find((assignment) => assignment.estado === 1) ?? lead.asignaciones[0];
+};
+
+const getLeadOwnerId = (lead: Lead) => {
+  const assignment = lead.asignaciones?.find((item) => item?.estado === 1);
+  return assignment?.id_asignado_usuario_empresa ?? assignment?.asignado?.id_usuario_empresa ?? null;
+};
+
+const normalizeStatusValue = (value?: string | null) =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+
+const buildCampaignSummaryFromLeads = (dataset: Lead[]): LeadCampaignSummary[] => {
+  const map = new Map<number, LeadCampaignSummary>();
+  dataset.forEach((lead) => {
+    const id = lead.campania?.id_campania;
+    if (!id) return;
+    if (!map.has(id)) {
+      map.set(id, {
+        id_campania: id,
+        nombre: lead.campania?.nombre ?? 'Campana',
+        totalReferidos: 0,
+      });
+    }
+    const current = map.get(id);
+    if (current) current.totalReferidos += 1;
+  });
+  return Array.from(map.values());
+};
+
+const buildContactSnapshot = (lead?: Lead | null): LeadContactFormState => ({
+  nombres: lead?.nombres ?? '',
+  apellidos: lead?.apellidos ?? '',
+  telefono: lead?.telefono ?? '',
+  email: lead?.email ?? '',
+  dni: lead?.dni ?? '',
+  ocupacion: lead?.ocupacion ?? '',
+  ciudad: lead?.ciudad ?? '',
+  descripcion: lead?.descripcion ?? '',
+});
+
+const formatTimelineDate = (value?: string | Date | null) => {
+  if (!value) return '-';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  const formatter = new Intl.DateTimeFormat('es-PE', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  return formatter.format(date);
+};
+
+const buildUserFriendlyName = (user?: { nombres?: string | null; apellidos?: string | null; email?: string | null }) => {
+  if (!user) return 'Sistema';
+  const fullName = `${user.nombres ?? ''} ${user.apellidos ?? ''}`.trim();
+  return fullName || user.email || 'Usuario';
 };
 
 type LeadAssignee = {
@@ -177,7 +300,60 @@ const extractVendorOptions = (raw: any): BulkVendorOption[] => {
     .filter((option) => option.id);
 };
 
-const normalizeLeads = (raw: any): Lead[] => unwrapLeadCollection<Lead>(raw);
+const buildLeadFullName = (lead: Lead) => {
+  return `${lead.nombres ?? ''} ${lead.apellidos ?? ''}`.trim() || lead.email || 'Lead sin nombre';
+};
+
+const getAssigneeLabel = (lead: Lead) => {
+  const { assignee } = resolveAssignee(lead as any);
+  if (!assignee) return 'Sin asignar';
+  return `${assignee.nombres ?? ''} ${assignee.apellidos ?? ''}`.trim() || assignee.email || 'Usuario';
+};
+
+const buildLeadTimelineFromAssignments = (lead?: Lead | null): TimelineItem[] => {
+  if (!lead) return [];
+  const entries: TimelineItem[] = [];
+  if (lead.fecha_creacion) {
+    entries.push({
+      id: `creation-${lead.id_lead}`,
+      dateLabel: formatTimelineDate(lead.fecha_creacion),
+      message: 'Lead registrado en el sistema.',
+    });
+  }
+  (lead.asignaciones ?? []).forEach((assignment) => {
+    entries.push({
+      id: `assign-${assignment.id_asignacion}`,
+      dateLabel: formatTimelineDate(assignment.fecha_asignacion ?? assignment.actualizadoEn ?? assignment.creadoEn),
+      message: `${buildUserFriendlyName(assignment.actor)} asignó el lead a ${buildUserFriendlyName(assignment.asignado)}`,
+    });
+  });
+  return entries;
+};
+
+const getSortValue = (lead: Lead, field: SortField) => {
+  switch (field) {
+    case 'lead':
+      return buildLeadFullName(lead).toLowerCase();
+    case 'campania':
+      return (lead.campania?.nombre ?? '').toLowerCase();
+    case 'estado':
+      return (lead.estado?.nombre ?? '').toLowerCase();
+    case 'asignado':
+      return getAssigneeLabel(lead).toLowerCase();
+    case 'origen':
+      return (lead.origen ?? '').toLowerCase();
+    case 'creado':
+      return new Date(lead.fecha_creacion ?? 0).getTime();
+    case 'unassigned': {
+      const { assignedAt } = resolveAssignee(lead as any);
+      const createdAt = new Date(lead.fecha_creacion ?? 0).getTime();
+      const reference = assignedAt ? new Date(assignedAt).getTime() : Date.now();
+      return Math.max(reference - createdAt, 0);
+    }
+    default:
+      return '';
+  }
+};
 
 type ImportReportPanelProps = {
   job: LeadImportJob;
@@ -286,7 +462,7 @@ const ImportReportPanel = ({
                     </p>
                   ))}
                 </div>
-              ) : null}
+                      ) : null}
               {entries.length ? (
                 <div className="max-h-64 overflow-auto rounded-md border border-border-subtle">
                   <ul className="divide-y divide-border-subtle text-sm">
@@ -320,16 +496,41 @@ const ImportReportPanel = ({
   );
 };
 
-export const LeadsAdmin = () => {
+export const LeadsAdmin = ({
+  variant = 'admin',
+  showOriginFilter = true,
+  showOriginColumn = true,
+  title,
+  subtitle,
+}: LeadsAdminProps = {}) => {
   const { push } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isVendorMode = variant === 'vendor';
+  const parsedUserId = Number(user?.id ?? NaN);
+  const currentUserId = Number.isFinite(parsedUserId) ? parsedUserId : null;
+  const pendingStatusLabel = 'pendiente';
+  const assignedStatusLabel = 'asignado';
+  const canEditLead = isVendorMode || user?.role === Role.ADMIN || user?.role === Role.SUPERVISOR;
+
+  const invalidateLeadQueries = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['crm-admin-leads'] });
+    queryClient.invalidateQueries({ queryKey: ['crm-vendor-leads-table'] });
+    queryClient.invalidateQueries({ queryKey: ['crm-kanban'] });
+  }, [queryClient]);
 
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
+  const [filtersExpanded, setFiltersExpanded] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.matchMedia('(min-width: 768px)').matches;
+  });
+  const [debouncedSearch, setDebouncedSearch] = useState(DEFAULT_FILTERS.search);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [selectedAction, setSelectedAction] = useState<LeadBulkAction>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
   const [selectedStatusId, setSelectedStatusId] = useState<number | null>(null);
+  const [pagination, setPagination] = useState({ page: 1, pageSize: DEFAULT_PAGE_SIZE });
   const [isMetaDialogOpen, setMetaDialogOpen] = useState(false);
   const [isImportDialogOpen, setImportDialogOpen] = useState(false);
   const [importPreview, setImportPreview] = useState<LeadImportPreview | null>(null);
@@ -343,22 +544,165 @@ export const LeadsAdmin = () => {
   const [isImportReportOpen, setImportReportOpen] = useState(false);
   const [isImportReportLoading, setImportReportLoading] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
-  const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'creado', direction: 'desc' });
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
-  const [editLeadState, setEditLeadState] = useState<{ estadoId: string; descripcion: string }>({
-    estadoId: '',
+  const [contactForm, setContactForm] = useState<LeadContactFormState>(() => ({
+    nombres: '',
+    apellidos: '',
+    telefono: '',
+    email: '',
+    dni: '',
+    ocupacion: '',
+    ciudad: '',
     descripcion: '',
+  }));
+  const [operationState, setOperationState] = useState<LeadOperationState>({
+    vendorId: '',
+    statusId: '',
+    active: true,
   });
+  const [activeLeadTab, setActiveLeadTab] = useState<'details' | 'history'>('details');
   const importJobHandledRef = useRef<Record<string, LeadImportJobStatus | undefined>>({});
+  const pendingUrlLeadIdRef = useRef<number | null>(null);
   const isImportProcessing = activeImportJob?.status === 'pending' || activeImportJob?.status === 'processing';
 
   const companyId = user?.companyId ?? null;
+  const resetToFirstPage = useCallback(() => {
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }));
+  }, []);
+
+  const statusFilterId = filters.statusId === 'all' ? undefined : Number(filters.statusId);
+  const campaignFilterId =
+    filters.campaignId === 'all' || filters.campaignId === 'none'
+      ? undefined
+      : Number(filters.campaignId);
+  const vendorFilterId = filters.vendorId === 'all' ? undefined : Number(filters.vendorId);
+
+  const leadsQueryKey = isVendorMode
+    ? [
+        'crm-vendor-leads-table',
+        currentUserId,
+        pagination.page,
+        pagination.pageSize,
+        debouncedSearch || 'all',
+        statusFilterId ?? 'all',
+        filters.onlyUnassigned ? 'unassigned' : 'all',
+        filters.campaignId,
+      ]
+    : [
+        'crm-admin-leads',
+        user?.companyId,
+        pagination.page,
+        pagination.pageSize,
+        debouncedSearch,
+        statusFilterId ?? 'all',
+        filters.onlyUnassigned ? 'unassigned' : 'all',
+        campaignFilterId ?? 'all',
+        vendorFilterId ?? 'all',
+      ];
 
   const leadsQuery = useQuery({
-    queryKey: ['crm-admin-leads', user?.companyId],
-    queryFn: () => LeadService.listByEmpresa({ limit: 250 }),
-    enabled: Boolean(user),
+    queryKey: leadsQueryKey,
+    queryFn: async () => {
+      if (isVendorMode) {
+        const vendorFilters: Record<string, unknown> = {
+          limit: 1000,
+          search: debouncedSearch || undefined,
+          id_estado_lead: statusFilterId,
+          id_campania: campaignFilterId,
+        };
+
+        if (user?.type === 'empresa') {
+          if (!currentUserId) {
+            return {
+              data: [],
+              total: 0,
+              page: pagination.page,
+              limit: pagination.pageSize,
+              campaigns: [],
+            };
+          }
+          try {
+            const response = await LeadService.listByEmpresa({
+              page: pagination.page,
+              limit: pagination.pageSize,
+              search: debouncedSearch || undefined,
+              id_estado_lead: statusFilterId,
+              solo_sin_asignar: filters.onlyUnassigned || undefined,
+              id_campania: campaignFilterId,
+              asignado_a_usuario_empresa_id: currentUserId,
+            });
+            const dataset = unwrapLeadCollection<Lead>(response);
+            const filtered = filters.campaignId === 'none' ? dataset.filter((lead) => !lead.campania) : dataset;
+            const patchedTotal =
+              filters.campaignId === 'none'
+                ? filtered.length
+                : (response as { total?: number }).total ?? filtered.length;
+            return {
+              ...response,
+              data: filtered,
+              total: patchedTotal,
+              campaigns: buildCampaignSummaryFromLeads(filtered),
+            };
+          } catch (error) {
+            console.error('[CRM][Vendor] listByEmpresa fallback', error);
+            const fallbackRows = await LeadService.listVendorUniverse({
+              filters: vendorFilters,
+              includeEmpresa: false,
+              freelerUserId: null,
+              empresaUserId: currentUserId,
+            });
+            const dataset = Array.isArray(fallbackRows) ? fallbackRows : [];
+            const filtered = dataset
+              .filter((lead) => (filters.onlyUnassigned ? !getActiveAssignmentEntity(lead) : true))
+              .filter((lead) => (filters.campaignId === 'none' ? !lead.campania : true));
+            const total = filtered.length;
+            const startIndex = Math.max((pagination.page - 1) * pagination.pageSize, 0);
+            const pageItems = filtered.slice(startIndex, startIndex + pagination.pageSize);
+            return {
+              data: pageItems,
+              total,
+              page: pagination.page,
+              limit: pagination.pageSize,
+              campaigns: buildCampaignSummaryFromLeads(filtered),
+            };
+          }
+        }
+
+        const rows = await LeadService.listVendorUniverse({
+          filters: vendorFilters,
+          includeEmpresa: false,
+          freelerUserId: user?.type === 'freeler' ? currentUserId : null,
+          empresaUserId: user?.type === 'empresa' ? currentUserId : null,
+        });
+        const dataset = Array.isArray(rows) ? rows : [];
+        const filtered = dataset
+          .filter((lead) => (filters.onlyUnassigned ? !getActiveAssignmentEntity(lead) : true))
+          .filter((lead) => (filters.campaignId === 'none' ? !lead.campania : true));
+        const total = filtered.length;
+        const startIndex = Math.max((pagination.page - 1) * pagination.pageSize, 0);
+        const pageItems = filtered.slice(startIndex, startIndex + pagination.pageSize);
+        return {
+          data: pageItems,
+          total,
+          page: pagination.page,
+          limit: pagination.pageSize,
+          campaigns: buildCampaignSummaryFromLeads(filtered),
+        };
+      }
+      return LeadService.listByEmpresa({
+        page: pagination.page,
+        limit: pagination.pageSize,
+        search: debouncedSearch || undefined,
+        id_estado_lead: statusFilterId,
+        solo_sin_asignar: filters.onlyUnassigned || undefined,
+        id_campania: campaignFilterId,
+        asignado_a_usuario_empresa_id: vendorFilterId,
+      });
+    },
+    enabled: Boolean(user?.id),
+    keepPreviousData: true,
   });
 
   const importCampaignsQuery = useQuery({
@@ -405,6 +749,32 @@ export const LeadsAdmin = () => {
     setConfirmingImport(false);
     setActiveImportJob(null);
     importJobHandledRef.current = {};
+  };
+
+  const toggleSortField = (field: SortField) => {
+    setSortConfig((prev) => {
+      if (prev.field === field) {
+        return { field, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { field, direction: field === 'creado' ? 'desc' : 'asc' };
+    });
+  };
+
+  const renderSortableHead = (label: string, field: SortField, alignRight = false) => {
+    const isActive = sortConfig.field === field;
+    const Icon = isActive ? (sortConfig.direction === 'asc' ? ChevronUp : ChevronDown) : ArrowUpDown;
+    return (
+      <TableHead className={alignRight ? 'text-right' : undefined}>
+        <button
+          type="button"
+          className={`group inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide ${alignRight ? 'justify-end' : 'justify-start'} text-content-muted transition-colors hover:text-content`}
+          onClick={() => toggleSortField(field)}
+        >
+          <span>{label}</span>
+          <Icon className="h-3.5 w-3.5 text-content-muted group-hover:text-content" />
+        </button>
+      </TableHead>
+    );
   };
 
   const handleDismissImportReport = () => {
@@ -455,7 +825,7 @@ export const LeadsAdmin = () => {
         await loadImportReport(job);
         resetImportState();
         setImportDialogOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['crm-admin-leads'] });
+        invalidateLeadQueries();
         return;
       }
       if (job.status === 'failed') {
@@ -464,11 +834,11 @@ export const LeadsAdmin = () => {
           job.errors
             .slice(0, 3)
             .map((item) => `Fila ${item.row || '?'}: ${item.issues.join(', ')}`)
-            .join(' | ') || 'La importaci�n fall�. Revisa el archivo e int�ntalo nuevamente.';
+            .join(' | ') || 'La importaci?n fall?. Revisa el archivo e int?ntalo nuevamente.';
         setImportError(summary);
       }
     },
-    [loadImportReport, queryClient, resetImportState, setImportDialogOpen],
+    [invalidateLeadQueries, loadImportReport, resetImportState, setImportDialogOpen],
   );
   const handleImportFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -483,7 +853,7 @@ export const LeadsAdmin = () => {
   const handleConfirmImport = async () => {
     if (!importPreview || isImportProcessing) return;
     if (!selectedCampaignId) {
-      setImportError('Selecciona una campaÃ±a para continuar.');
+      setImportError('Selecciona una campaña para continuar.');
       return;
     }
     const missing = REQUIRED_IMPORT_FIELDS.filter((field) => field.required && !headerMapping[field.key]);
@@ -544,7 +914,7 @@ export const LeadsAdmin = () => {
     } catch {
       push({
         title: 'No se pudo descargar la plantilla',
-        description: 'Revisa tu conexiÃ³n e intenta nuevamente.',
+        description: 'Revisa tu conexión e intenta nuevamente.',
         variant: 'danger',
       });
     } finally {
@@ -562,60 +932,260 @@ export const LeadsAdmin = () => {
     queryFn: () => UserService.getUsuariosEmpresa(),
   });
 
-  const leads = useMemo(() => normalizeLeads(leadsQuery.data), [leadsQuery.data]);
+  const leads = leadsQuery.data?.data ?? [];
+  const totalLeads = leadsQuery.data?.total ?? 0;
+  const currentPage = leadsQuery.data?.page ?? pagination.page;
+  const currentLimit = leadsQuery.data?.limit ?? pagination.pageSize;
+  const totalPages = Math.max(1, Math.ceil(Math.max(totalLeads, 0) / Math.max(currentLimit, 1)));
+  const pageStart = totalLeads === 0 ? 0 : (currentPage - 1) * currentLimit + 1;
+  const pageEnd = totalLeads === 0 ? 0 : Math.min(totalLeads, pageStart + leads.length - 1);
   const statusOptions = useMemo(() => extractStatusOptions(statusesQuery.data), [statusesQuery.data]);
-  const vendorOptions = useMemo(() => extractVendorOptions(vendorsQuery.data), [vendorsQuery.data]);
+  const getStatusIdByLabel = useCallback(
+    (label: string) => {
+      const normalized = normalizeStatusValue(label);
+      const match =
+        statusOptions.find((status) => normalizeStatusValue(status.label) === normalized) ??
+        FALLBACK_STATUSES.find((status) => normalizeStatusValue(status.label) === normalized);
+      return match?.id ?? null;
+    },
+    [statusOptions],
+  );
+  const vendorOptions = useMemo(() => {
+    const options = extractVendorOptions(vendorsQuery.data);
+    if (isVendorMode && currentUserId) {
+      return options.filter((vendor) => vendor.id === currentUserId);
+    }
+    return options;
+  }, [currentUserId, isVendorMode, vendorsQuery.data]);
+  const vendorFilterOptions = useMemo(
+    () =>
+      vendorOptions
+        .filter((option) => option.id)
+        .map((option) => ({ value: String(option.id), label: option.label })),
+    [vendorOptions],
+  );
+  const originFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    leads.forEach((lead) => {
+      const origin = (lead.origen ?? '').trim();
+      if (!origin) return;
+      const key = origin.toLowerCase();
+      if (!map.has(key)) map.set(key, origin);
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }));
+  }, [leads]);
+  const cityFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    leads.forEach((lead) => {
+      const city = (lead.ciudad ?? '').trim();
+      if (!city) return;
+      const key = city.toLowerCase();
+      if (!map.has(key)) map.set(key, city);
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }));
+  }, [leads]);
+  const campaignFilterOptions = useMemo(() => {
+    const campaignsSummary =
+      ((leadsQuery.data as { campaigns?: LeadCampaignSummary[] } | undefined)?.campaigns) ?? [];
+    const mapped = campaignsSummary
+      .filter((campaign): campaign is LeadCampaignSummary => typeof campaign?.id_campania === 'number')
+      .map((campaign) => ({ value: String(campaign.id_campania), label: campaign.nombre }));
+    const options =
+      mapped.length > 0
+        ? mapped.sort((a, b) => a.label.localeCompare(b.label))
+        : Array.from(
+            leads.reduce((acc, lead) => {
+              if (lead.campania?.id_campania) {
+                acc.set(lead.campania.id_campania, lead.campania.nombre ?? 'Sin campa??a');
+              }
+              return acc;
+            }, new Map<number, string>()),
+          )
+            .sort((a, b) => a[1].localeCompare(b[1]))
+            .map(([id, label]) => ({ value: String(id), label }));
+    if (isVendorMode) {
+      const hasNoCampaign = leads.some((lead) => !lead.campania);
+      if (hasNoCampaign) {
+        options.unshift({ value: 'none', label: t('crmLeads.filters.campaign.none') });
+      }
+    }
+    return options;
+  }, [isVendorMode, leadsQuery.data, leads]);
+  const pageSizeOptions = useMemo(
+    () => PAGE_SIZE_OPTIONS.map((value) => ({ value: String(value), label: `${value} por pagina` })),
+    [],
+  );
+  const historyQuery = useQuery({
+    queryKey: ['lead-history', editingLead?.id_lead],
+    queryFn: () => LeadService.getAssignmentHistory(editingLead!.id_lead),
+    enabled: Boolean(isEditDialogOpen && editingLead?.id_lead && !isVendorMode),
+    staleTime: 1000 * 60,
+  });
+
 
   useEffect(() => {
-    setSelectedIds((prev) => prev.filter((id) => leads.some((lead) => lead.id_lead === id)));
-  }, [leads]);
+    const handler = setTimeout(() => setDebouncedSearch(filters.search), 400);
+    return () => clearTimeout(handler);
+  }, [filters.search]);
 
-  const filteredLeads = useMemo(() => {
-    const term = filters.search.trim().toLowerCase();
-    const result = leads
-      .filter((lead) => {
-        if (!term) return true;
-        const haystack = [
-          lead.nombres,
-          lead.apellidos,
-          lead.email,
-          lead.telefono,
-          lead.dni,
-          lead.origen,
-          lead.ciudad,
-          lead.campania?.nombre,
-        ]
-          .join(' ')
-          .toLowerCase();
-        return haystack.includes(term);
-      })
-      .filter((lead) => {
-        if (filters.statusId === 'all') return true;
-        const statusId = lead.estado?.id_estado_lead ?? lead.id_estado_lead;
-        return Number(statusId) === Number(filters.statusId);
-      })
-      .filter((lead) => {
-        if (!filters.onlyUnassigned) return true;
-        const { assignee } = resolveAssignee(lead as any);
-        return !assignee;
-      });
+  useEffect(() => {
+    resetToFirstPage();
+    setSelectedIds([]);
+  }, [
+    debouncedSearch,
+    filters.statusId,
+    filters.onlyUnassigned,
+    filters.campaignId,
+    filters.vendorId,
+    filters.origin,
+    filters.city,
+    resetToFirstPage,
+  ]);
 
-    return result.sort((a, b) => {
-      const dateA = new Date(a.fecha_creacion ?? 0).getTime();
-      const dateB = new Date(b.fecha_creacion ?? 0).getTime();
-      return sortOrder === 'recent' ? dateB - dateA : dateA - dateB;
+  useEffect(() => {
+    if (!leadsQuery.data) return;
+    const total = Math.max(leadsQuery.data.total ?? 0, 0);
+    const limit = Math.max(leadsQuery.data.limit ?? pagination.pageSize, 1);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    if (pagination.page > totalPages) {
+      setPagination((prev) => ({ ...prev, page: totalPages }));
+    }
+  }, [leadsQuery.data, pagination.page, pagination.pageSize]);
+
+  useEffect(() => {
+    if (!editingLead) {
+      setContactForm(buildContactSnapshot(null));
+      setOperationState({ vendorId: '', statusId: '', active: true });
+      return;
+    }
+    setContactForm(buildContactSnapshot(editingLead));
+    const assignment = getActiveAssignmentEntity(editingLead);
+    setOperationState({
+      vendorId: assignment ? String(assignment.id_asignado_usuario_empresa) : '',
+      statusId: editingLead.estado?.id_estado_lead ? String(editingLead.estado.id_estado_lead) : '',
+      active: (assignment?.estado ?? 1) === 1,
     });
-  }, [leads, filters, sortOrder]);
+  }, [editingLead]);
+
+  const visibleLeads = useMemo(() => {
+    const normalizedOrigin = filters.origin === 'all' ? null : filters.origin;
+    const normalizedCity = filters.city === 'all' ? null : filters.city;
+    const campaignFilterValue = filters.campaignId;
+    const vendorFilterValue = filters.vendorId;
+    const filteredDataset = leads.filter((lead) => {
+      if (normalizedOrigin) {
+        const leadOrigin = (lead.origen ?? '').trim().toLowerCase();
+        if (!leadOrigin || leadOrigin !== normalizedOrigin) return false;
+      }
+      if (campaignFilterValue !== 'all') {
+        if (campaignFilterValue === 'none') {
+          if (lead.campania) return false;
+        } else {
+          const leadCampaignId = lead.campania?.id_campania ? String(lead.campania.id_campania) : '';
+          if (leadCampaignId !== campaignFilterValue) return false;
+        }
+      }
+      if (vendorFilterValue !== 'all') {
+        const ownerId = getLeadOwnerId(lead);
+        if (String(ownerId ?? '') !== vendorFilterValue) return false;
+      }
+      if (normalizedCity) {
+        const leadCity = (lead.ciudad ?? '').trim().toLowerCase();
+        if (!leadCity || leadCity !== normalizedCity) return false;
+      }
+      return true;
+    });
+    const directionFactor = sortConfig.direction === 'asc' ? 1 : -1;
+    const sorted = [...filteredDataset].sort((a, b) => {
+      const valueA = getSortValue(a, sortConfig.field);
+      const valueB = getSortValue(b, sortConfig.field);
+
+      if (typeof valueA === 'number' && typeof valueB === 'number') {
+        return (valueA - valueB) * directionFactor;
+      }
+
+      const textA = String(valueA ?? '').toLowerCase();
+      const textB = String(valueB ?? '').toLowerCase();
+      return textA.localeCompare(textB) * directionFactor;
+    });
+
+    return sorted;
+  }, [leads, sortConfig, filters.origin, filters.campaignId, filters.vendorId, filters.city]);
 
   const allSelected =
-    filteredLeads.length > 0 && filteredLeads.every((lead) => selectedIds.includes(lead.id_lead));
+    visibleLeads.length > 0 && visibleLeads.every((lead) => selectedIds.includes(lead.id_lead));
+
+  const contactBaseline = useMemo(() => buildContactSnapshot(editingLead), [editingLead]);
+  const contactChanged = useMemo(
+    () =>
+      (Object.keys(contactBaseline) as Array<keyof LeadContactFormState>).some(
+        (key) => contactBaseline[key] !== contactForm[key],
+      ),
+    [contactBaseline, contactForm],
+  );
+  const currentAssignment = editingLead ? getActiveAssignmentEntity(editingLead) : null;
+  const vendorBaseline = currentAssignment ? String(currentAssignment.id_asignado_usuario_empresa) : '';
+  const statusBaseline = editingLead?.estado?.id_estado_lead ? String(editingLead.estado.id_estado_lead) : '';
+  const vendorChanged = operationState.vendorId !== vendorBaseline;
+  const statusChanged = operationState.statusId !== statusBaseline;
+  const historyEntries = historyQuery.data?.entries ?? [];
+  const fallbackTimeline = useMemo(() => buildLeadTimelineFromAssignments(editingLead), [editingLead]);
+  const timelineItems = useMemo<TimelineItem[]>(() => {
+    if (!historyEntries.length) return fallbackTimeline;
+    return historyEntries.flatMap((entry, index) => {
+      const previous = index > 0 ? historyEntries[index - 1] : null;
+      const dateLabel = formatTimelineDate(entry.fecha_asignacion);
+      const actorName = buildUserFriendlyName(entry.actor);
+      const items: TimelineItem[] = [];
+      if (!previous || previous.asignado?.id_usuario_empresa !== entry.asignado?.id_usuario_empresa) {
+        items.push({
+          id: `${entry.id_asignacion}-assign`,
+          dateLabel,
+          message: `El ${dateLabel}, ${actorName} asignó el lead a ${buildUserFriendlyName(entry.asignado)}`,
+        });
+      }
+      if (!previous || previous.estado?.id_estado_lead !== entry.estado?.id_estado_lead) {
+        items.push({
+          id: `${entry.id_asignacion}-status`,
+          dateLabel,
+          message: `El ${dateLabel}, ${actorName} cambió a ${entry.estado?.nombre ?? 'Sin estado'}`,
+        });
+      }
+      if (!items.length) {
+        items.push({
+          id: `${entry.id_asignacion}-event`,
+          dateLabel,
+          message: `El ${dateLabel}, ${actorName} registró una actualización.`,
+        });
+      }
+      return items;
+    });
+  }, [fallbackTimeline, historyEntries]);
+  const assignmentInfo = editingLead ? resolveAssignee(editingLead as any) : { assignee: null, assignedAt: null };
+  const assignedAtLabel = assignmentInfo.assignedAt ? formatDate(assignmentInfo.assignedAt) : 'Sin registro';
+  const unassignedLabel = computeUnassignedDuration(
+    editingLead?.fecha_creacion,
+    assignmentInfo.assignedAt,
+  );
+  const originLabel = editingLead?.origen ?? 'No indicado';
+  const campaignLabel = editingLead?.campania?.nombre ?? 'Sin campaña';
+  const creationLabel = editingLead?.fecha_creacion ? formatDate(editingLead.fecha_creacion) : '-';
+  const assignmentDisplayName = assignmentInfo.assignee
+    ? `${assignmentInfo.assignee.nombres ?? ''} ${assignmentInfo.assignee.apellidos ?? ''}`.trim() ||
+      assignmentInfo.assignee.email ||
+      'Usuario'
+    : 'Sin asignar';
 
   const toggleSelectAll = () => {
     if (allSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !filteredLeads.some((lead) => lead.id_lead === id)));
+      setSelectedIds((prev) => prev.filter((id) => !visibleLeads.some((lead) => lead.id_lead === id)));
     } else {
       setSelectedIds((prev) =>
-        Array.from(new Set([...prev, ...filteredLeads.map((lead) => lead.id_lead)])),
+        Array.from(new Set([...prev, ...visibleLeads.map((lead) => lead.id_lead)])),
       );
     }
   };
@@ -631,42 +1201,29 @@ export const LeadsAdmin = () => {
     setSelectedStatusId(null);
   };
 
+  const handlePageChange = (nextPage: number) => {
+    setPagination((prev) => (prev.page === nextPage ? prev : { ...prev, page: nextPage }));
+  };
+
+  const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextSize = Number(event.target.value);
+    setPagination({
+      page: 1,
+      pageSize: Number.isFinite(nextSize) && nextSize > 0 ? nextSize : DEFAULT_PAGE_SIZE,
+    });
+  };
+
   const bulkMutation = useMutation({
     mutationFn: LeadService.bulkUpdate,
     onSuccess: () => {
       push({ title: 'Accion aplicada', description: 'Los leads se actualizaron correctamente.' });
       resetBulkState();
-      queryClient.invalidateQueries({ queryKey: ['crm-admin-leads'] });
+      invalidateLeadQueries();
     },
     onError: () => {
       push({
         title: 'No se pudo aplicar la accion',
         description: 'Intentalo nuevamente.',
-        variant: 'danger',
-      });
-    },
-  });
-
-  const editLeadMutation = useMutation({
-    mutationFn: async (payload: { estadoId: string; descripcion: string }) => {
-      if (!editingLead) {
-        throw new Error('NO_LEAD_SELECTED');
-      }
-      const body: Partial<LeadDraft> & { id_estado_lead?: number | null } = {};
-      body.descripcion = payload.descripcion.trim() || undefined;
-      body.id_estado_lead = payload.estadoId ? Number(payload.estadoId) : null;
-      return LeadService.update(editingLead.id_lead, body);
-    },
-    onSuccess: () => {
-      push({ title: 'Lead actualizado', description: 'Los cambios se guardaron correctamente.' });
-      setEditDialogOpen(false);
-      setEditingLead(null);
-      queryClient.invalidateQueries({ queryKey: ['crm-admin-leads'] });
-    },
-    onError: () => {
-      push({
-        title: 'No se pudo actualizar el lead',
-        description: 'Revisa los datos e intenta nuevamente.',
         variant: 'danger',
       });
     },
@@ -702,42 +1259,388 @@ export const LeadsAdmin = () => {
     bulkMutation.mutate(payload);
   };
 
-  const openEditLeadDialog = (lead: Lead) => {
-    setEditingLead(lead);
-    setEditLeadState({
-      estadoId: lead.estado?.id_estado_lead ? String(lead.estado.id_estado_lead) : '',
-      descripcion: lead.descripcion ?? '',
-    });
-    setEditDialogOpen(true);
+  const refreshEditingLead = useCallback(async (leadId: number) => {
+    try {
+      const fresh = await LeadService.findById(leadId);
+      setEditingLead(fresh);
+    } catch {
+      // Si falla la actualización silenciosamente, mantenemos el estado actual
+    }
+  }, []);
+
+  const contactMutation = useMutation({
+    mutationFn: ({ leadId, data }: { leadId: number; data: Partial<LeadDraft> }) =>
+      LeadService.update(leadId, data),
+    onSuccess: async (_response, variables) => {
+      push({ title: 'Lead actualizado', description: 'Los datos de contacto se guardaron.' });
+      await refreshEditingLead(variables.leadId);
+      invalidateLeadQueries();
+    },
+    onError: () => {
+      push({
+        title: 'No se pudieron guardar los datos',
+        description: 'Revisa la información e intenta nuevamente.',
+        variant: 'danger',
+      });
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({
+      leadId,
+      statusId,
+      usuarioEmpresaId,
+    }: {
+      leadId: number;
+      statusId: number;
+      usuarioEmpresaId: number;
+    }) =>
+      LeadService.updateStatus({
+        leadId,
+        id_estado_lead: statusId,
+        usuarioEmpresaId,
+      }),
+    onSuccess: async (_response, variables) => {
+      push({ title: 'Estado actualizado', description: 'El lead cambió de estado.' });
+      await refreshEditingLead(variables.leadId);
+      invalidateLeadQueries();
+    },
+    onError: () => {
+      push({
+        title: 'No se pudo cambiar el estado',
+        description: 'Intenta nuevamente en unos segundos.',
+        variant: 'danger',
+      });
+    },
+  });
+
+  const assignVendorMutation = useMutation({
+    mutationFn: ({
+      leadId,
+      usuarioEmpresaId,
+      vendedorId,
+    }: {
+      leadId: number;
+      usuarioEmpresaId: number;
+      vendedorId: number;
+    }) =>
+      LeadService.assignLead({
+        leadId,
+        usuarioEmpresaId,
+        asignarAUsuarioEmpresaId: vendedorId,
+      }),
+    onSuccess: async (_response, variables) => {
+      push({ title: 'Asignaci?n actualizada', description: 'El lead fue asignado.' });
+      const wasPending = normalizeStatusValue(editingLead?.estado?.nombre) === pendingStatusLabel;
+      if (wasPending) {
+        const assignedStatusId = getStatusIdByLabel(assignedStatusLabel);
+        if (assignedStatusId && user?.id) {
+          try {
+            await LeadService.updateStatus({
+              leadId: variables.leadId,
+              id_estado_lead: assignedStatusId,
+              usuarioEmpresaId: Number(user.id),
+            });
+          } catch {
+            push({
+              title: 'Estado no actualizado',
+              description: 'No se pudo marcar el lead como asignado automaticamente.',
+              variant: 'warning',
+            });
+          }
+        }
+      }
+      await refreshEditingLead(variables.leadId);
+      invalidateLeadQueries();
+    },
+    onError: () => {
+      push({
+        title: 'No se pudo asignar el lead',
+        description: 'Revisa la selección e intenta nuevamente.',
+        variant: 'danger',
+      });
+    },
+  });
+
+  const assignmentStateMutation = useMutation({
+    mutationFn: (payload: {
+      asignacionId: number;
+      estado: 'activo' | 'inactivo';
+      usuarioEmpresaId: number;
+      leadId: number;
+    }) =>
+      LeadService.updateAsignacion(payload.asignacionId, {
+        usuarioEmpresaId: payload.usuarioEmpresaId,
+        estado: payload.estado,
+      }),
+    onSuccess: async (_response, variables) => {
+      push({ title: 'Asignación actualizada', description: 'El estado del vendedor cambió.' });
+      await refreshEditingLead(variables.leadId);
+      invalidateLeadQueries();
+    },
+    onError: () => {
+      push({
+        title: 'No se pudo actualizar la asignación',
+        description: 'Inténtalo nuevamente.',
+        variant: 'danger',
+      });
+    },
+  });
+
+  const openEditLeadDialog = useCallback(
+    (lead: Lead) => {
+      if (!canEditLead) {
+        push({
+          title: 'Sin permisos',
+          description: 'Solo los roles Admin y Supervisor pueden editar leads.',
+          variant: 'danger',
+        });
+        return;
+      }
+      setEditingLead(lead);
+      setActiveLeadTab('details');
+      setEditDialogOpen(true);
+    },
+    [canEditLead, push],
+  );
+
+  useEffect(() => {
+    const targetIdParam = searchParams.get('leadId');
+    if (!targetIdParam || !canEditLead) return;
+    const parsedId = Number(targetIdParam);
+    if (!Number.isFinite(parsedId)) return;
+    if (editingLead?.id_lead === parsedId || pendingUrlLeadIdRef.current === parsedId) {
+      return;
+    }
+    pendingUrlLeadIdRef.current = parsedId;
+    let isMounted = true;
+
+    const cleanup = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('leadId');
+      setSearchParams(next, { replace: true });
+      pendingUrlLeadIdRef.current = null;
+    };
+
+    const resolveLead = async () => {
+      const localMatch = leads.find((lead) => lead.id_lead === parsedId);
+      if (localMatch) {
+        openEditLeadDialog(localMatch);
+        cleanup();
+        return;
+      }
+      try {
+        const fetched = await LeadService.findById(parsedId);
+        if (!isMounted) return;
+        openEditLeadDialog(fetched);
+      } catch {
+        if (isMounted) {
+          push({
+            title: 'No se pudo abrir el lead',
+            description: 'Revisa que el lead siga disponible.',
+            variant: 'danger',
+          });
+        }
+      } finally {
+        if (isMounted) {
+          cleanup();
+        }
+      }
+    };
+
+    void resolveLead();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [searchParams, canEditLead, leads, openEditLeadDialog, push, setSearchParams, editingLead]);
+
+  const closeLeadDrawer = () => {
+    setEditDialogOpen(false);
+    setEditingLead(null);
+    setContactForm(buildContactSnapshot(null));
+    setOperationState({ vendorId: '', statusId: '', active: true });
   };
 
-  const handleEditLeadSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    editLeadMutation.mutate({
-      estadoId: editLeadState.estadoId,
-      descripcion: editLeadState.descripcion,
+  const handleContactInputChange = (field: keyof LeadContactFormState, value: string) => {
+    setContactForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleContactReset = () => {
+    if (editingLead) {
+      setContactForm(buildContactSnapshot(editingLead));
+    }
+  };
+
+  const handleContactSave = () => {
+    if (!editingLead) return;
+    const leadId = editingLead.id_lead;
+    const data: Partial<LeadDraft> = {
+      nombres: contactForm.nombres.trim() || undefined,
+      apellidos: contactForm.apellidos.trim() || undefined,
+      telefono: contactForm.telefono.trim() || undefined,
+      email: contactForm.email.trim() || undefined,
+      dni: contactForm.dni.trim() || undefined,
+      ocupacion: contactForm.ocupacion.trim() || undefined,
+      ciudad: contactForm.ciudad.trim() || undefined,
+      descripcion: contactForm.descripcion.trim() || undefined,
+    };
+    contactMutation.mutate({ leadId, data });
+  };
+
+  const handleStatusSave = () => {
+    if (!editingLead) return;
+    if (!operationState.statusId) {
+      push({
+        title: 'Selecciona un estado',
+        description: 'Elige un estado antes de guardar.',
+        variant: 'warning',
+      });
+      return;
+    }
+    if (!user?.id) {
+      push({
+        title: 'Sesion requerida',
+        description: 'Vuelve a iniciar sesion para actualizar el estado.',
+        variant: 'danger',
+      });
+      return;
+    }
+    statusMutation.mutate({
+      leadId: editingLead.id_lead,
+      statusId: Number(operationState.statusId),
+      usuarioEmpresaId: Number(user.id),
     });
+  };
+
+  const handleVendorSave = () => {
+    if (!editingLead) return;
+    if (!operationState.vendorId) {
+      push({
+        title: 'Selecciona un vendedor',
+        description: 'Elige un vendedor antes de actualizar.',
+        variant: 'warning',
+      });
+      return;
+    }
+    if (!user?.id) {
+      push({
+        title: 'Sesion requerida',
+        description: 'Vuelve a iniciar sesion para reasignar el lead.',
+        variant: 'danger',
+      });
+      return;
+    }
+    assignVendorMutation.mutate({
+      leadId: editingLead.id_lead,
+      vendedorId: Number(operationState.vendorId),
+      usuarioEmpresaId: Number(user.id),
+    });
+  };
+
+  const handleAssignmentToggle = (checked: boolean) => {
+    if (!editingLead) return;
+    const assignment = currentAssignment;
+    if (!assignment) {
+      push({
+        title: 'Sin asignación activa',
+        description: 'Asigna el lead a un vendedor antes de cambiar su estado.',
+        variant: 'warning',
+      });
+      setOperationState((prev) => ({ ...prev, active: false }));
+      return;
+    }
+    if (!user?.id) {
+      push({
+        title: 'Sesion requerida',
+        description: 'Vuelve a iniciar sesion para modificar la asignacion.',
+        variant: 'danger',
+      });
+      return;
+    }
+    setOperationState((prev) => ({ ...prev, active: checked }));
+    assignmentStateMutation.mutate(
+      {
+        asignacionId: assignment.id_asignacion,
+        estado: checked ? 'activo' : 'inactivo',
+        usuarioEmpresaId: Number(user.id),
+        leadId: editingLead.id_lead,
+      },
+      {
+        onError: () => {
+          setOperationState((prev) => ({ ...prev, active: !checked }));
+        },
+      },
+    );
   };
 
   return (
-    <section className="space-y-6">
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold text-content">Gestor de leads</h1>
-          <p className="text-sm text-content-muted">
-            Filtra, asigna y actualiza el estado de los leads de tu empresa desde un solo lugar.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setMetaDialogOpen(true)}>
-            Conectar Meta Ads
-          </Button>
-          <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
-            Importar desde Excel
-          </Button>
-        </div>
-      </header>
-      {importReport ? (
+    <>
+      <div>
+        <section className="flex-1 min-w-0 space-y-6">
+        <header className="space-y-4">
+          <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between">
+            <div>
+              <h1 className="text-3xl font-semibold text-content">
+                {title ?? 'Gestor de leads'}
+              </h1>
+              <p className="text-sm text-content-muted">
+                {subtitle ?? 'Filtra, asigna y actualiza el estado de los leads de tu empresa desde un solo lugar.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!isVendorMode && (
+                <>
+                  <Button
+                    type="button"
+                    className="border-transparent bg-[#1877F2] text-white shadow-card hover:bg-[#0f5bd7]"
+                    onClick={() => setMetaDialogOpen(true)}
+                  >
+                    Conectar Meta Ads
+                  </Button>
+                  <Button
+                    type="button"
+                    className="border-transparent bg-[#22c55e] text-white shadow-card hover:bg-[#1ca34c]"
+                    onClick={() => setImportDialogOpen(true)}
+                  >
+                    Importar desde Excel
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="w-full md:max-w-md">
+              <Input
+                label="Buscar"
+                placeholder="Nombre, tel?fono, DNI o correo"
+                value={filters.search}
+                onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
+                autoComplete="off"
+                className="w-full"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setFiltersExpanded((prev) => !prev)}
+                className="w-full sm:w-auto"
+              >
+                {filtersExpanded ? 'Ocultar filtros' : 'Mostrar filtros'}
+              </Button>
+              <Button
+                type="button"
+                variant={filters.onlyUnassigned ? 'primary' : 'ghost'}
+                onClick={() => setFilters((prev) => ({ ...prev, onlyUnassigned: !prev.onlyUnassigned }))}
+                className="h-10 w-full px-4 sm:w-auto"
+              >
+                {filters.onlyUnassigned ? 'Mostrando sin asignar' : 'Solo sin asignar'}
+              </Button>
+            </div>
+          </div>
+        </header>
+        {importReport ? (
         <ImportReportPanel
           job={importReport}
           isOpen={isImportReportOpen}
@@ -745,59 +1648,64 @@ export const LeadsAdmin = () => {
           onToggle={() => setImportReportOpen((prev) => !prev)}
           onDismiss={handleDismissImportReport}
         />
-      ) : null}
+              ) : null}
 
-      <div className="flex flex-wrap gap-3">
-        <div className="w-full max-w-xs">
-          <Input
-            label="Buscar"
-            placeholder="Nombre, correo, campaÃ±a..."
-            value={filters.search}
-            onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
-            autoComplete="off"
+        {filtersExpanded ? (
+        <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {showOriginFilter && (
+            <Select
+              label={t('crmLeads.filters.origin.label')}
+              value={filters.origin}
+              onChange={(event) => setFilters((prev) => ({ ...prev, origin: event.target.value }))}
+              options={[{ label: t('crmLeads.filters.origin.all'), value: 'all' }, ...originFilterOptions]}
+              className="w-full"
+            />
+          )}
+          <Select
+            label={t('crmLeads.filters.campaign.label')}
+            value={filters.campaignId}
+            onChange={(event) => setFilters((prev) => ({ ...prev, campaignId: event.target.value }))}
+            options={[{ label: t('crmLeads.filters.campaign.all'), value: 'all' }, ...campaignFilterOptions]}
+            className="w-full"
+          />
+          <Select
+            label={t('crmLeads.filters.status.label')}
+            value={filters.statusId === 'all' ? 'all' : String(filters.statusId)}
+            onChange={(event) =>
+              setFilters((prev) => ({
+                ...prev,
+                statusId: event.target.value === 'all' ? 'all' : Number(event.target.value),
+              }))
+            }
+            options={[
+              { label: t('crmLeads.filters.status.all'), value: 'all' },
+              ...statusOptions.map((status) => ({ value: status.id, label: status.label })),
+            ]}
+            className="w-full"
+          />
+          {!isVendorMode && (
+            <Select
+              label={t('crmLeads.filters.vendor.label')}
+              value={filters.vendorId}
+              onChange={(event) => setFilters((prev) => ({ ...prev, vendorId: event.target.value }))}
+              options={[{ label: t('crmLeads.filters.vendor.all'), value: 'all' }, ...vendorFilterOptions]}
+              className="w-full"
+            />
+          )}
+          <Select
+            label={t('crmLeads.filters.city.label')}
+            value={filters.city}
+            onChange={(event) => setFilters((prev) => ({ ...prev, city: event.target.value }))}
+            options={[{ label: t('crmLeads.filters.city.all'), value: 'all' }, ...cityFilterOptions]}
+            className="w-full"
           />
         </div>
-        <div className="w-full max-w-xs">
-        <Select
-          label="Estado"
-          value={filters.statusId === 'all' ? 'all' : String(filters.statusId)}
-          onChange={(event) =>
-            setFilters((prev) => ({
-              ...prev,
-              statusId: event.target.value === 'all' ? 'all' : Number(event.target.value),
-            }))
-          }
-          options={[
-            { label: 'Todos los estados', value: 'all' },
-            ...statusOptions.map((status) => ({ value: status.id, label: status.label })),
-          ]}
-        />
-      </div>
-      <div className="w-full max-w-xs">
-        <Select
-          label="Ordenar"
-          value={sortOrder}
-          onChange={(event) => setSortOrder(event.target.value === 'oldest' ? 'oldest' : 'recent')}
-          options={[
-            { label: 'Mas recientes', value: 'recent' },
-            { label: 'Mas antiguos', value: 'oldest' },
-          ]}
-        />
-      </div>
-      <Button
-        type="button"
-        variant={filters.onlyUnassigned ? 'primary' : 'ghost'}
-        onClick={() => setFilters((prev) => ({ ...prev, onlyUnassigned: !prev.onlyUnassigned }))}
-        className="h-10 px-4"
-        >
-          {filters.onlyUnassigned ? 'Mostrando sin asignar' : 'Solo sin asignar'}
-        </Button>
-      </div>
+              ) : null}
 
       {leadsQuery.isLoading ? (
         <p className="text-sm text-content-muted">Cargando leads...</p>
-      ) : filteredLeads.length ? (
-        <Table>
+      ) : visibleLeads.length ? (
+        <Table minWidthClass="min-w-[1100px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">
@@ -809,24 +1717,21 @@ export const LeadsAdmin = () => {
                   aria-label="Seleccionar todos los leads filtrados"
                 />
               </TableHead>
-              <TableHead>Lead</TableHead>
-              <TableHead>CampaÃ±a</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Asignado a</TableHead>
-              <TableHead>Origen</TableHead>
-              <TableHead>Creado</TableHead>
-              <TableHead>Tiempo sin asignar</TableHead>
+              {renderSortableHead('Lead', 'lead')}
+              {renderSortableHead('Campaña', 'campania')}
+              {renderSortableHead('Estado', 'estado')}
+              {renderSortableHead('Asignado a', 'asignado')}
+              {showOriginColumn && renderSortableHead('Origen', 'origen')}
+              {renderSortableHead('Creado', 'creado')}
+              {renderSortableHead('Tiempo sin asignar', 'unassigned')}
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredLeads.map((lead) => {
+            {visibleLeads.map((lead) => {
               const isSelected = selectedIds.includes(lead.id_lead);
               const { assignee, assignedAt } = resolveAssignee(lead as any);
-              const fullName =
-                `${lead.nombres ?? ''} ${lead.apellidos ?? ''}`.trim() ||
-                lead.email ||
-                'Lead sin nombre';
+              const fullName = buildLeadFullName(lead);
               const assigneeName = assignee
                 ? `${assignee.nombres ?? ''} ${assignee.apellidos ?? ''}`.trim() ||
                   assignee.email ||
@@ -857,7 +1762,7 @@ export const LeadsAdmin = () => {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{lead.campania?.nombre ?? 'Sin campaÃ±a'}</TableCell>
+                  <TableCell>{lead.campania?.nombre ?? 'Sin campaña'}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusBadgeVariant(lead.estado?.nombre ?? lead.estado)}>
                       {normalizeStatusLabel(lead.estado?.nombre ?? lead.estado, 'Pendiente')}
@@ -878,13 +1783,17 @@ export const LeadsAdmin = () => {
                       <span className="text-xs text-content-muted">Sin asignar</span>
                     )}
                   </TableCell>
-                  <TableCell>{lead.origen ?? 'No indicado'}</TableCell>
+                  {showOriginColumn && <TableCell>{lead.origen ?? 'No indicado'}</TableCell>}
                   <TableCell>{formatDate(lead.fecha_creacion)}</TableCell>
                   <TableCell className="text-sm text-content-muted">{unassignedDuration}</TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => openEditLeadDialog(lead)}>
-                      Editar
-                    </Button>
+                    {canEditLead ? (
+                      <Button size="sm" variant="outline" onClick={() => openEditLeadDialog(lead)}>
+                        Editar
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-content-subtle">Sin acceso</span>
+                    )}
                   </TableCell>
                 </TableRow>
               );
@@ -894,6 +1803,28 @@ export const LeadsAdmin = () => {
       ) : (
         <p className="text-sm text-content-muted">No encontramos leads con los filtros seleccionados.</p>
       )}
+
+      {totalLeads > 0 ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-content">
+              {`Mostrando ${pageStart || 0} - ${pageEnd || 0} de ${totalLeads} leads`}
+            </p>
+            <p className="text-xs text-content-muted">{`Pagina ${currentPage} de ${totalPages}`}</p>
+          </div>
+          <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:justify-end">
+            <div className="w-full max-w-[200px]">
+              <Select
+                label="Leads por pagina"
+                value={String(pagination.pageSize)}
+                onChange={handlePageSizeChange}
+                options={pageSizeOptions}
+              />
+            </div>
+            <Pagination page={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
+          </div>
+        </div>
+              ) : null}
 
       <LeadBulkActionsBar
         selectedCount={selectedIds.length}
@@ -909,6 +1840,263 @@ export const LeadsAdmin = () => {
         onConfirm={handleBulkConfirm}
         disabled={bulkMutation.isPending}
       />
+        </section>
+        {isEditDialogOpen && editingLead ? (
+          <div className="hidden">
+            <LeadDetailDrawer
+              open={isEditDialogOpen && Boolean(editingLead)}
+              onClose={closeLeadDrawer}
+              title={buildLeadFullName(editingLead)}
+              footer={
+                <div className="flex justify-end">
+                  <Button variant="ghost" onClick={closeLeadDrawer}>
+                    Cerrar
+                  </Button>
+                </div>
+              }
+            >
+            {editingLead ? (
+              <div className="space-y-4">
+            <div className="flex gap-3 border-b border-border-subtle pb-2">
+              {[
+                { id: 'details', label: 'Detalles de lead' },
+                { id: 'history', label: 'Historial' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveLeadTab(tab.id as 'details' | 'history')}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-sm transition',
+                    activeLeadTab === tab.id
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-surface-muted text-content-muted hover:text-content',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {activeLeadTab === 'details' ? (
+              <div className="space-y-4">
+                <Accordion title="Datos de contacto" defaultOpen>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Input
+                      label="DNI"
+                      value={contactForm.dni}
+                      onChange={(event) => handleContactInputChange('dni', event.target.value)}
+                    />
+                    <Input
+                      label="Nombres"
+                      value={contactForm.nombres}
+                      onChange={(event) => handleContactInputChange('nombres', event.target.value)}
+                    />
+                    <Input
+                      label="Apellidos"
+                      value={contactForm.apellidos}
+                      onChange={(event) => handleContactInputChange('apellidos', event.target.value)}
+                    />
+                    <Input
+                      label="Teléfono"
+                      value={contactForm.telefono}
+                      onChange={(event) => handleContactInputChange('telefono', event.target.value)}
+                    />
+                    <Input
+                      label="Email"
+                      type="email"
+                      value={contactForm.email}
+                      onChange={(event) => handleContactInputChange('email', event.target.value)}
+                    />
+                    <Input
+                      label="Ocupación"
+                      value={contactForm.ocupacion}
+                      onChange={(event) => handleContactInputChange('ocupacion', event.target.value)}
+                    />
+                    <Input
+                      label="Ciudad"
+                      value={contactForm.ciudad}
+                      onChange={(event) => handleContactInputChange('ciudad', event.target.value)}
+                    />
+                  </div>
+                  <TextArea
+                    label="Descripción"
+                    minRows={3}
+                    value={contactForm.descripcion}
+                    onChange={(event) => handleContactInputChange('descripcion', event.target.value)}
+                  />
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button type="button" variant="ghost" onClick={handleContactReset} disabled={!editingLead}>
+                      Restablecer
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleContactSave}
+                      disabled={!contactChanged || contactMutation.isPending}
+                      isLoading={contactMutation.isPending}
+                    >
+                      Guardar datos
+                    </Button>
+                  </div>
+                </Accordion>
+
+                <Accordion title="Datos de operación" defaultOpen>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {!isVendorMode && (
+                      <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2">
+                        <div>
+                          <p className="text-sm font-semibold text-content">Asignaci??n activa</p>
+                          <p className="text-xs text-content-muted">
+                            Controla si el vendedor puede gestionar este lead.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={operationState.active}
+                          onChange={(event) => handleAssignmentToggle(event.target.checked)}
+                          disabled={!currentAssignment || assignmentStateMutation.isPending}
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs text-content-muted">Campaña</p>
+                      <p className="text-sm font-semibold text-content">{campaignLabel}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-content-muted">Fecha de creación</p>
+                      <p className="text-sm font-semibold text-content">{creationLabel}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-content-muted">Tiempo sin asignar</p>
+                      <p className="text-sm font-semibold text-content">{unassignedLabel}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-content-muted">Vendedor asignado</p>
+                      <p className="text-sm font-semibold text-content">{assignmentDisplayName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-content-muted">Fecha de asignación</p>
+                      <p className="text-sm font-semibold text-content">{assignedAtLabel}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    {!isVendorMode && (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="space-y-1 text-sm text-content">
+                        <span className="font-medium">Cambiar vendedor</span>
+                        <Select
+                          value={operationState.vendorId}
+                          onChange={(event) =>
+                            setOperationState((prev) => ({ ...prev, vendorId: event.target.value }))
+                          }
+                        >
+                          <option value="">Sin asignar</option>
+                          {vendorOptions.map((vendor) => (
+                            <option key={vendor.id} value={vendor.id}>
+                              {vendor.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                        <div className="flex items-end">
+                        <Button
+                          type="button"
+                          onClick={handleVendorSave}
+                          disabled={!vendorChanged || assignVendorMutation.isPending}
+                          isLoading={assignVendorMutation.isPending}
+                        >
+                          Actualizar asignación
+                        </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="space-y-1 text-sm text-content">
+                        <span className="font-medium">Estado del lead</span>
+                        <Select
+                          value={operationState.statusId}
+                          onChange={(event) =>
+                            setOperationState((prev) => ({ ...prev, statusId: event.target.value }))
+                          }
+                        >
+                          <option value="">Selecciona un estado</option>
+                          {statusOptions.map((status) => (
+                            <option key={status.id} value={status.id}>
+                              {status.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          onClick={handleStatusSave}
+                          disabled={!statusChanged || statusMutation.isPending}
+                          isLoading={statusMutation.isPending}
+                        >
+                          Actualizar estado
+                        </Button>
+                      </div>
+                    </div>
+
+                    {!isVendorMode && (
+                      <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2">
+                      <div>
+                        <p className="text-sm font-semibold text-content">Asignación activa</p>
+                        <p className="text-xs text-content-muted">
+                          Controla si el vendedor puede gestionar este lead.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={operationState.active}
+                        onChange={(event) => handleAssignmentToggle(event.target.checked)}
+                        disabled={!currentAssignment || assignmentStateMutation.isPending}
+                      />
+                    </div>
+                    )}
+                  </div>
+                </Accordion>
+              </div>
+            ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-content-muted">
+                Este historial es provisional; la versión detallada se mostrará más adelante.
+              </p>
+              {historyQuery.isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-content-muted">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                    Consultando historial...
+                  </div>
+                ) : timelineItems.length ? (
+                  <ul className="relative border-l border-border-subtle pl-4">
+                    {timelineItems.map((item) => (
+                      <li key={item.id} className="mb-4 last:mb-0">
+                        <span className="absolute -left-[7px] mt-1 h-3 w-3 rounded-full bg-primary-500" />
+                        <p className="text-xs text-content-muted">{item.dateLabel}</p>
+                        <p className="text-sm text-content">{item.message}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : historyQuery.isError ? (
+                  <p className="text-sm text-content-muted">
+                    No se pudo cargar el historial. Intenta nuevamente.
+                  </p>
+                ) : (
+                  <p className="text-sm text-content-muted">
+                    Aún no hay movimientos registrados en la asignación de este lead.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+            ) : (
+              <p className="text-sm text-content-muted">Selecciona un lead para ver sus detalles.</p>
+            )}
+            </LeadDetailDrawer>
+          </div>
+                ) : null}
+      </div>
 
       <Dialog
         open={isImportDialogOpen}
@@ -921,17 +2109,17 @@ export const LeadsAdmin = () => {
             <>
               <div className="space-y-2">
                 {importCampaignsQuery.isLoading ? (
-                  <p className="text-xs text-content-muted">Cargando campaÃ±as disponibles...</p>
+                  <p className="text-xs text-content-muted">Cargando campañas disponibles...</p>
                 ) : !hasCampaignOptions ? (
                   <Alert
                     variant="warning"
-                    title="No hay campaÃ±as activas"
-                    description="Crea una campaÃ±a para poder importar leads."
+                    title="No hay campañas activas"
+                    description="Crea una campaña para poder importar leads."
                     onClose={() => handleImportDialogChange(false)}
                   />
                 ) : (
                   <p className="text-xs text-content-muted">
-                    Luego de subir el archivo podrÃ¡s elegir la campaÃ±a destino durante el mapeo.
+                    Luego de subir el archivo podrás elegir la campaña destino durante el mapeo.
                   </p>
                 )}
               </div>
@@ -947,7 +2135,7 @@ export const LeadsAdmin = () => {
                 {importError ? (
                   <p className="text-sm text-error-500">{importError}</p>
                 ) : (
-                  <p className="text-xs text-content-muted">Formatos soportados: CSV, XLSX, XLS (mÃ¡x. 5 MB).</p>
+                  <p className="text-xs text-content-muted">Formatos soportados: CSV, XLSX, XLS (máx. 5 MB).</p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -965,7 +2153,7 @@ export const LeadsAdmin = () => {
                 <div>
                   <p className="text-sm font-medium text-content">Vista previa detectada</p>
                   <p className="text-xs text-content-muted">
-                    Ajusta el mapeo de columnas antes de confirmar la importaciÃ³n.
+                    Ajusta el mapeo de columnas antes de confirmar la importación.
                   </p>
                 </div>
                 <Button type="button" variant="ghost" onClick={resetImportState} disabled={isImportProcessing}>
@@ -976,7 +2164,7 @@ export const LeadsAdmin = () => {
                 <div className="space-y-3 rounded-lg border border-border-subtle p-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-content">Procesando importaciÃ³n</p>
+                      <p className="text-sm font-medium text-content">Procesando importación</p>
                       <p className="text-xs text-content-muted">{importProgressSummary}</p>
                     </div>
                     <span className="text-sm font-semibold text-content">{importProgressPercent}%</span>
@@ -1006,40 +2194,40 @@ export const LeadsAdmin = () => {
                         ))}
                       </ul>
                     </div>
-                  ) : null}
+                          ) : null}
                 </div>
               ) : (
                 <>
                   <div className="space-y-2 rounded-lg border border-border-subtle p-3">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm font-medium text-content">CampaÃ±a destino</p>
+                      <p className="text-sm font-medium text-content">Campaña destino</p>
                       {selectedCampaignLabel ? (
                         <span className="text-xs text-content-muted">Seleccionada: {selectedCampaignLabel}</span>
-                      ) : null}
+                              ) : null}
                     </div>
                     <Select
-                      label="CampaÃ±a"
+                      label="Campaña"
                       required
                       value={selectedCampaignId}
                       onChange={(event) => setSelectedCampaignId(event.target.value)}
                       disabled={importCampaignsQuery.isLoading || !hasCampaignOptions || isImportProcessing}
                       options={[
-                        { label: 'Selecciona una campaÃ±a', value: '' },
+                        { label: 'Selecciona una campaña', value: '' },
                         ...campaignOptions,
                       ]}
                     />
                     {importCampaignsQuery.isLoading ? (
-                      <p className="text-xs text-content-muted">Actualizando campaÃ±as...</p>
+                      <p className="text-xs text-content-muted">Actualizando campañas...</p>
                     ) : !hasCampaignOptions ? (
                       <Alert
                         variant="warning"
-                        title="No hay campaÃ±as activas"
-                        description="Crea una campaÃ±a para poder confirmar la importaciÃ³n."
+                        title="No hay campañas activas"
+                        description="Crea una campaña para poder confirmar la importación."
                         onClose={() => handleImportDialogChange(false)}
                       />
                     ) : (
                       <p className="text-xs text-content-muted">
-                        Selecciona la campaÃ±a que recibirÃ¡ todos los leads de esta importaciÃ³n.
+                        Selecciona la campaña que recibirá todos los leads de esta importación.
                       </p>
                     )}
                   </div>
@@ -1054,7 +2242,7 @@ export const LeadsAdmin = () => {
                             <span className="ml-1 text-xs font-normal text-content-muted">
                               ({field.optionalLabel})
                             </span>
-                          ) : null}
+                                  ) : null}
                         </span>
                         <select
                           className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
@@ -1112,7 +2300,7 @@ export const LeadsAdmin = () => {
                   isLoading={isConfirmingImport || isImportProcessing}
                   disabled={!selectedCampaignId || isImportProcessing}
                 >
-                  {isImportProcessing ? 'Procesando...' : 'Confirmar importaciÃ³n'}
+                  {isImportProcessing ? 'Procesando...' : 'Confirmar importación'}
                 </Button>
               </div>
             </div>
@@ -1138,12 +2326,14 @@ export const LeadsAdmin = () => {
           />
         </div>
       </Dialog>
-
-    </section>
+    </>
   );
 };
 
 export default LeadsAdmin;
+
+
+
 
 
 

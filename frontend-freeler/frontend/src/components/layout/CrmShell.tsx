@@ -1,18 +1,19 @@
-﻿import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3,
+  Bot,
   Building2,
-  ChevronsLeft,
-  ChevronsRight,
   Kanban,
   LayoutDashboard,
   LogOut,
+  Menu,
   User as UserIcon,
   UserCog,
   Users2,
   Waypoints,
+  Coins,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
@@ -71,7 +72,9 @@ const buildNavItems = (role: Role | null | undefined): NavItem[] => {
     leads: t('nav.leads'),
     users: t('nav.users'),
     analytics: t('nav.analytics'),
-    kanban: t('nav.leads'),
+    kanban: t('nav.kanban'),
+    ai: t('nav.aiConfig'),
+    commissions: t('nav.commissions'),
   };
   switch (role) {
     case Role.ADMIN:
@@ -79,8 +82,11 @@ const buildNavItems = (role: Role | null | undefined): NavItem[] => {
         { to: APP_ROUTES.crm.home, label: labels.dashboard, icon: <LayoutDashboard className="h-5 w-5" /> },
         { to: APP_ROUTES.crm.campanas, label: labels.campaigns, icon: <Waypoints className="h-5 w-5" /> },
         { to: APP_ROUTES.crm.leads, label: labels.leads, icon: <Users2 className="h-5 w-5" /> },
+        { to: APP_ROUTES.crm.leadsKanban, label: labels.kanban, icon: <Kanban className="h-5 w-5" /> },
         { to: APP_ROUTES.crm.usuarios, label: labels.users, icon: <UserCog className="h-5 w-5" /> },
         { to: APP_ROUTES.crm.analitica, label: labels.analytics, icon: <BarChart3 className="h-5 w-5" /> },
+        { to: APP_ROUTES.crm.comisiones, label: labels.commissions, icon: <Coins className="h-5 w-5" /> },
+        { to: APP_ROUTES.crm.iaConfig, label: labels.ai, icon: <Bot className="h-5 w-5" /> },
       ];
     case Role.SUPERVISOR:
       return [
@@ -93,7 +99,8 @@ const buildNavItems = (role: Role | null | undefined): NavItem[] => {
     case Role.VENDEDOR:
       return [
         { to: APP_ROUTES.crm.vendedor.home, label: labels.dashboard, icon: <LayoutDashboard className="h-5 w-5" /> },
-        { to: APP_ROUTES.crm.vendedor.leads, label: labels.kanban, icon: <Kanban className="h-5 w-5" /> },
+        { to: APP_ROUTES.crm.vendedor.leads, label: labels.leads, icon: <Users2 className="h-5 w-5" /> },
+        { to: APP_ROUTES.crm.vendedor.kanban, label: labels.kanban, icon: <Kanban className="h-5 w-5" /> },
       ];
     case Role.ANALISTA:
       return [{ to: APP_ROUTES.crm.analitica, label: labels.analytics, icon: <BarChart3 className="h-5 w-5" /> }];
@@ -171,6 +178,11 @@ export const CrmShell = () => {
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
   const [isHeaderMenuOpen, setHeaderMenuOpen] = useState(false);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobileNavVisible, setMobileNavVisible] = useState(true);
+  const [isDesktopLayout, setDesktopLayout] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.matchMedia('(min-width: 768px)').matches;
+  });
   const [profileForm, setProfileForm] = useState<ProfileFormState>(emptyProfileForm);
   const [companyForm, setCompanyForm] = useState<CompanyFormState>(emptyCompanyForm);
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
@@ -256,6 +268,28 @@ export const CrmShell = () => {
       document.removeEventListener('keydown', handleKey);
     };
   }, [isHeaderMenuOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(min-width: 768px)');
+    const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      setDesktopLayout(event.matches ?? mediaQuery.matches);
+    };
+    handleChange(mediaQuery);
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+    mediaQuery.addListener(handleChange as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
+    return () =>
+      mediaQuery.removeListener(handleChange as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
+  }, []);
+
+  useEffect(() => {
+    if (isDesktopLayout) {
+      setMobileNavVisible(true);
+    }
+  }, [isDesktopLayout]);
   const handleAvatarFile = useCallback(
     async (file?: File | null) => {
       if (!file) return;
@@ -346,6 +380,8 @@ export const CrmShell = () => {
   });
   const roleLabel = user?.role ? ROLE_LABELS[user.role] : t('crmShell.noRole');
   const roleBadgeVariant = getRoleBadgeVariant(user?.role);
+  const safeUserEmail = user?.email ?? t('crmShell.profileEmailFallback');
+  const canManageUsers = user?.role === Role.ADMIN || user?.role === Role.SUPERVISOR;
   const profileName =
     profile
       ? `${profile.nombres ?? ''} ${profile.apellidos ?? ''}`.trim() || profile.email
@@ -353,6 +389,21 @@ export const CrmShell = () => {
   const companyName = company?.razon_social ?? t('crmShell.noAssignedCompany');
   const companySecondary = company?.email ?? t('crmShell.companyPlaceholder');
   const activeCampaignLabel = t('common.allCampaigns');
+  const handleNavigationToggle = () => {
+    if (isDesktopLayout) {
+      setSidebarCollapsed((prev) => !prev);
+      return;
+    }
+    setMobileNavVisible((prev) => !prev);
+  };
+  const navigationToggleLabel = isDesktopLayout
+    ? isSidebarCollapsed
+      ? t('crmShell.expandNav')
+      : t('crmShell.collapseNav')
+    : isMobileNavVisible
+    ? t('crmShell.hideBottomNav')
+    : t('crmShell.showBottomNav');
+  const isHamburgerActive = isDesktopLayout ? isSidebarCollapsed : !isMobileNavVisible;
   const closeHeaderMenu = () => setHeaderMenuOpen(false);
   const headerMenuContent = (
     <>
@@ -360,7 +411,7 @@ export const CrmShell = () => {
         <div>
           <p className="text-xs uppercase tracking-wide text-content-muted">{t('common.profile')}</p>
           <p className="text-sm font-semibold text-content">{profileName}</p>
-          <p className="text-xs text-content-subtle">{user.email}</p>
+          <p className="text-xs text-content-subtle">{safeUserEmail}</p>
         </div>
         <div className="grid gap-2 text-xs text-content-subtle">
           <div>
@@ -389,7 +440,7 @@ export const CrmShell = () => {
       >
           {t('common.editProfile')}
         </Button>
-        {(user.role === Role.ADMIN || user.role === Role.SUPERVISOR) && (
+        {canManageUsers && (
           <Button
             variant="ghost"
             className="justify-start"
@@ -456,43 +507,68 @@ export const CrmShell = () => {
   }
   return (
     <Fragment>
-      <div className="min-h-screen bg-background text-content transition-colors">
-        <div className="flex min-h-screen">
+      <div className="flex min-h-screen flex-col bg-background text-content transition-colors">
+        <header className="sticky top-0 z-40 border-b border-border bg-surface/95 px-4 py-1.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface/80 md:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 md:min-h-[56px]">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label={navigationToggleLabel}
+                title={navigationToggleLabel}
+                onClick={handleNavigationToggle}
+                className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle bg-surface text-content transition hover:border-primary-400 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                  isHamburgerActive && 'border-primary-500 text-primary-600',
+                )}
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div className="hidden items-center gap-3 sm:flex">
+                <img src={freelerLogo} alt="Freeler CRM" className="h-8 w-auto" />
+                <div>
+                  <h1 className="text-xl font-semibold text-content">{t('common.freelerCrm')}</h1>
+                  <p className="text-xs text-content-muted">{companyName}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 sm:hidden">
+                <img src={freelerLogo} alt="Freeler CRM" className="h-8 w-auto" />
+                <div>
+                  <h1 className="text-lg font-semibold text-content">{t('common.freelerCrm')}</h1>
+                  <p className="text-xs text-content-muted">{companyName}</p>
+                </div>
+              </div>
+            </div>
+            <div className="relative flex items-center gap-2 sm:gap-3" ref={headerMenuRef}>
+              <ThemeSwitch />
+              <button
+                type="button"
+                onClick={() => setHeaderMenuOpen((prev) => !prev)}
+                className="flex items-center gap-3 rounded-full border border-border-subtle bg-surface px-2 py-1.5 transition hover:border-primary-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white">
+                  {getInitials(profileName || user?.email)}
+                </span>
+                <span className="hidden flex-col items-start text-left sm:flex">
+                  <span className="text-xs text-content-muted">{t('crmShell.myProfile')}</span>
+                  <span className="text-sm font-medium text-content">{profileName || user?.email}</span>
+                </span>
+              </button>
+              {isHeaderMenuOpen && (
+                <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-xl border border-border bg-surface shadow-lg">
+                  {headerMenuContent}
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+        <div className="flex flex-1 bg-background-subtle">
           <aside
             className={cn(
-              'relative hidden flex-shrink-0 border-r border-border bg-surface-elevated shadow-card transition-all duration-200 md:flex md:flex-col',
+              'relative hidden flex-shrink-0 border-r border-border bg-surface-elevated shadow-card transition-all duration-200 md:flex md:flex-col md:overflow-hidden md:sticky md:top-14 md:h-[calc(100vh-3.5rem)]',
               isSidebarCollapsed ? 'w-20 px-3 py-6' : 'w-72 px-5 py-6 lg:w-80',
             )}
           >
-            <button
-              type="button"
-              aria-label={isSidebarCollapsed ? 'Expandir menu' : 'Contraer menu'}
-              onClick={() => setSidebarCollapsed((prev) => !prev)}
-              className="absolute top-6 -right-3 z-20 hidden h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-surface shadow-card transition hover:border-primary-400 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 md:flex"
-            >
-              {isSidebarCollapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
-            </button>
             <div className="flex flex-1 flex-col gap-6">
-              <div
-                className={cn(
-                  'rounded-xl border border-border-subtle bg-surface-elevated px-4 py-3 shadow-card',
-                  isSidebarCollapsed && 'flex h-12 items-center justify-center border-none bg-transparent px-0 py-0 shadow-none',
-                )}
-              >
-                {isSidebarCollapsed ? (
-                  <div className="flex justify-center">
-                    <img src={freelerLogo} alt="Freeler CRM" className="h-9 w-auto" />
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <img src={freelerLogo} alt="Freeler CRM" className="h-9 w-auto" />
-                    <div>
-                      <p className="text-sm font-semibold text-content">{t('common.freelerCrm')}</p>
-                      <p className="text-xs text-content-muted">{t('crmShell.dashboardSubtitle')}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
               {isSidebarCollapsed ? (
                 <div className="flex justify-center">
                   <div className="relative inline-flex">
@@ -525,23 +601,43 @@ export const CrmShell = () => {
                     to={item.to}
                     className={({ isActive }) =>
                       cn(
-                        'group inline-flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
+                        'group relative flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 transition-all',
                         isActive
-                          ? 'bg-primary-50 text-primary-700 shadow-card'
-                          : 'hover:bg-surface-muted hover:text-content',
+                          ? 'border-primary-500/50 bg-primary-500/10 text-primary-900 shadow-card dark:border-primary-400/50 dark:bg-primary-400/20 dark:text-white'
+                          : 'text-content-muted hover:bg-surface-muted hover:text-content',
                         isSidebarCollapsed && 'justify-center px-2',
                       )
                     }
                   >
-                    <span
-                      className={cn(
-                        'flex h-10 w-10 items-center justify-center rounded-lg border border-transparent bg-primary-500/15 text-primary-500 transition-colors group-hover:bg-primary-500/20 dark:bg-primary-400/20 dark:text-primary-200 dark:group-hover:bg-primary-400/25',
-                        isSidebarCollapsed && 'h-9 w-9',
-                      )}
-                    >
-                      {item.icon}
-                    </span>
-                    {!isSidebarCollapsed && <span>{item.label}</span>}
+                    {({ isActive }) => (
+                      <>
+                        <span
+                          className={cn(
+                            'text-lg transition-colors',
+                            isActive
+                              ? 'text-primary-600 dark:text-primary-100'
+                              : 'text-primary-500 dark:text-primary-300 group-hover:text-primary-600',
+                          )}
+                        >
+                          {item.icon}
+                        </span>
+                        {!isSidebarCollapsed && (
+                          <div className="flex flex-1 items-center justify-between gap-2">
+                            <span
+                              className={cn(
+                                'font-semibold transition-colors',
+                                isActive ? 'text-content dark:text-white' : 'text-content',
+                              )}
+                            >
+                              {item.label}
+                            </span>
+                            {isActive && (
+                              <span className="h-1.5 w-10 rounded-full bg-primary-500 shadow-[0_0_10px_rgba(34,197,94,0.5)] dark:bg-primary-300" />
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </NavLink>
                 ))}
               </nav>
@@ -555,7 +651,7 @@ export const CrmShell = () => {
                 {!isSidebarCollapsed && (
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-content">{profileName}</p>
-                    <p className="text-xs text-content-subtle">{user.email}</p>
+                    <p className="text-xs text-content-subtle">{safeUserEmail}</p>
                     <Badge variant={roleBadgeVariant} className="mt-2">
                       {roleLabel}
                     </Badge>
@@ -564,53 +660,23 @@ export const CrmShell = () => {
               </div>
             </div>
           </aside>
-          <div className="flex flex-1 flex-col">
-            <header className="flex flex-col gap-3 border-b border-border bg-surface px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-6 md:px-6">
-              <div className="flex items-center gap-3">
-                <div className="hidden items-center gap-3 sm:flex">
-                  <img src={freelerLogo} alt="Freeler CRM" className="h-8 w-auto" />
-                  <div>
-                    <h1 className="text-xl font-semibold text-content">{t('common.freelerCrm')}</h1>
-                    <p className="text-xs text-content-muted">{companyName}</p>
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <main className="flex-1 overflow-auto px-4 py-6 pb-28 transition-colors sm:px-6 lg:px-10 lg:pb-10 min-h-0">
+              <div className="mx-auto w-full max-w-screen-2xl">
+                <div className="min-w-full overflow-x-auto">
+                  <div className="space-y-8">
+                    <Outlet />
                   </div>
                 </div>
-                <div className="flex items-center gap-3 sm:hidden">
-                  <img src={freelerLogo} alt="Freeler CRM" className="h-8 w-auto" />
-                  <div>
-                    <h1 className="text-lg font-semibold text-content">{t('common.freelerCrm')}</h1>
-                    <p className="text-xs text-content-muted">{companyName}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="relative flex items-center gap-3" ref={headerMenuRef}>
-                <ThemeSwitch />
-                <button
-                  type="button"
-                  onClick={() => setHeaderMenuOpen((prev) => !prev)}
-                  className="flex items-center gap-3 rounded-full border border-border-subtle bg-surface px-2 py-1.5 transition hover:border-primary-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white">
-                    {getInitials(profileName || user?.email)}
-                  </span>
-                  <span className="hidden flex-col items-start text-left sm:flex">
-                    <span className="text-xs text-content-muted">{t('crmShell.myProfile')}</span>
-                    <span className="text-sm font-medium text-content">{profileName || user?.email}</span>
-                  </span>
-                </button>
-                {isHeaderMenuOpen && (
-                  <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-xl border border-border bg-surface shadow-lg">
-                    {headerMenuContent}
-                  </div>
-                )}
-              </div>
-            </header>
-            <main className="flex-1 bg-background-subtle px-4 py-8 pb-28 transition-colors md:px-8 md:pb-8">
-              <div className="mx-auto max-w-6xl">
-                <Outlet />
               </div>
             </main>
             {/* Barra inferior para navegacin en dispositivos mviles */}
-            <nav className="fixed inset-x-0 bottom-0 z-[var(--z-drawer)] border-t border-border bg-surface-elevated shadow-card md:hidden">
+            <nav
+              className={cn(
+                'fixed inset-x-0 bottom-0 z-[var(--z-drawer)] border-t border-border bg-surface-elevated shadow-card md:hidden',
+                !isMobileNavVisible && 'hidden',
+              )}
+            >
               <div className="mx-auto flex max-w-4xl items-center justify-around px-4 py-2">
                 {navItems.map((item) => (
                   <NavLink
@@ -623,10 +689,19 @@ export const CrmShell = () => {
                       )
                     }
                   >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-muted text-primary-600">
-                      {item.icon}
-                    </span>
-                    <span className="max-w-[5rem] truncate">{item.label}</span>
+                    {({ isActive }) => (
+                      <>
+                        <span
+                          className={cn(
+                            'text-lg transition-colors',
+                            isActive ? 'text-primary-600 dark:text-primary-200' : 'text-content-muted',
+                          )}
+                        >
+                          {item.icon}
+                        </span>
+                        <span className="max-w-[5rem] truncate">{item.label}</span>
+                      </>
+                    )}
                   </NavLink>
                 ))}
               </div>
@@ -807,3 +882,6 @@ export const CrmShell = () => {
   );
 };
 export default CrmShell;
+
+
+

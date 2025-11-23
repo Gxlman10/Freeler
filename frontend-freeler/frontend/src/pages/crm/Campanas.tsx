@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CampaignService } from '@/services/campaign.service';
 import type { Campaign, CreateCampaignPayload } from '@/services/campaign.service';
@@ -6,12 +6,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
+import { TextArea } from '@/components/ui/TextArea';
+import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/common/Toasts';
 import { formatCurrency, formatDate } from '@/utils/helpers';
 import { useAuth } from '@/store/auth';
 import { Badge } from '@/components/ui/Badge';
 import { getStatusBadgeVariant, normalizeStatusLabel } from '@/utils/badges';
+import { Role } from '@/utils/constants';
+import { t } from '@/i18n';
 
 type CampaignFormState = {
   nombre: string;
@@ -33,6 +36,26 @@ const buildInitialForm = (): CampaignFormState => ({
   estado: 1,
 });
 
+const AUTO_CLOSE_STORAGE_KEY = 'freeler:crm:campanas:auto-close';
+
+const loadAutoCloseMap = () => {
+  if (typeof window === 'undefined') {
+    return {} as Record<number, boolean>;
+  }
+  try {
+    const stored = localStorage.getItem(AUTO_CLOSE_STORAGE_KEY);
+    if (!stored) return {};
+    const parsed = JSON.parse(stored) as Record<string, boolean>;
+    return Object.entries(parsed).reduce<Record<number, boolean>>((acc, [key, value]) => {
+      const id = Number(key);
+      if (!Number.isNaN(id) && value) acc[id] = true;
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+};
+
 export const Campanas = () => {
   const queryClient = useQueryClient();
   const { push } = useToast();
@@ -42,6 +65,10 @@ export const Campanas = () => {
   const [form, setForm] = useState<CampaignFormState>(() => buildInitialForm());
   const [editForm, setEditForm] = useState<CampaignFormState>(() => buildInitialForm());
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [autoDeactivateSelected, setAutoDeactivateSelected] = useState(false);
+  const [autoCloseMap, setAutoCloseMap] = useState<Record<number, boolean>>(() => loadAutoCloseMap());
+
+  const isAdmin = user?.role === Role.ADMIN;
 
   const resetForm = useCallback(() => {
     setForm(buildInitialForm());
@@ -64,12 +91,30 @@ export const Campanas = () => {
     ? data
     : [];
 
+  const setAutoCloseForCampaign = useCallback(
+    (campaignId: number, enabled: boolean) => {
+      setAutoCloseMap((prev) => {
+        const next = { ...prev };
+        if (enabled) {
+          next[campaignId] = true;
+        } else {
+          delete next[campaignId];
+        }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(AUTO_CLOSE_STORAGE_KEY, JSON.stringify(next));
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
   // Inyectamos los identificadores de la empresa y del usuario activo antes del POST
   const resolveSessionIds = useCallback(() => {
     if (!user || !user.companyId) {
       push({
-        title: 'No se pudo identificar la empresa',
-        description: 'Vuelve a iniciar sesion para registrar una campana.',
+        title: t('crmCampaigns.errors.missingCompanyTitle'),
+        description: t('crmCampaigns.errors.missingCompanyDescription'),
         variant: 'danger',
       });
       throw new Error('MISSING_SESSION_IDS');
@@ -84,15 +129,22 @@ export const Campanas = () => {
   const createCampaign = useMutation({
     mutationFn: (payload: CreateCampaignPayload) => CampaignService.create(payload),
     onSuccess: (_, variables) => {
-      push({ title: 'Campana creada', description: variables.nombre });
+      const campaignName = variables.nombre?.trim();
+      const description = campaignName
+        ? t('crmCampaigns.toasts.createSuccess.descriptionNamed', { name: campaignName })
+        : t('crmCampaigns.toasts.createSuccess.description');
+      push({
+        title: t('crmCampaigns.toasts.createSuccess.title'),
+        description,
+      });
       setDialogOpen(false);
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['crm-campanas'] });
     },
     onError: () => {
       push({
-        title: 'No se pudo crear la campana',
-        description: 'Revisa los datos ingresados.',
+        title: t('crmCampaigns.errors.createFailedTitle'),
+        description: t('crmCampaigns.errors.createFailedDescription'),
         variant: 'danger',
       });
     },
@@ -106,18 +158,51 @@ export const Campanas = () => {
       return CampaignService.update(editingCampaign.id_campania, payload);
     },
     onSuccess: (updated) => {
+      const campaignId = editingCampaign?.id_campania;
+      const updatedName = updated.nombre?.trim();
       push({
-        title: 'Campana actualizada',
-        description: updated.nombre ?? 'Cambios guardados correctamente.',
+        title: t('crmCampaigns.toasts.updateSuccess.title'),
+        description: updatedName || t('crmCampaigns.toasts.updateSuccess.description'),
       });
       setEditDialogOpen(false);
       setEditingCampaign(null);
+      if (campaignId) {
+        setAutoCloseForCampaign(campaignId, autoDeactivateSelected);
+      }
       queryClient.invalidateQueries({ queryKey: ['crm-campanas'] });
     },
     onError: () => {
       push({
-        title: 'No se pudo actualizar la campana',
-        description: 'Revisa los datos e intenta nuevamente.',
+        title: t('crmCampaigns.errors.updateFailedTitle'),
+        description: t('crmCampaigns.errors.updateFailedDescription'),
+        variant: 'danger',
+      });
+    },
+  });
+
+  const {
+    mutate: autoDeactivateCampaignMutate,
+    isPending: isAutoDeactivating,
+  } = useMutation({
+    mutationFn: async (campaignId: number) => {
+      const sessionIds = resolveSessionIds();
+      return CampaignService.update(campaignId, {
+        usuarioEmpresaId: sessionIds.usuarioEmpresaId,
+        estado: 0,
+      });
+    },
+    onSuccess: (_updated, campaignId) => {
+      setAutoCloseForCampaign(campaignId, false);
+      queryClient.invalidateQueries({ queryKey: ['crm-campanas'] });
+      push({
+        title: t('crmCampaigns.toasts.autoDeactivate.title'),
+        description: t('crmCampaigns.toasts.autoDeactivate.description'),
+      });
+    },
+    onError: () => {
+      push({
+        title: t('crmCampaigns.errors.deactivateFailedTitle'),
+        description: t('crmCampaigns.errors.deactivateFailedDescription'),
         variant: 'danger',
       });
     },
@@ -131,24 +216,24 @@ export const Campanas = () => {
         const commissionValue = Number(form.comision);
         if (Number.isNaN(commissionValue) || commissionValue < 0) {
           push({
-            title: 'Monto invalido',
-            description: 'Ingresa un monto valido para la comision.',
+            title: t('crmCampaigns.errors.invalidAmountTitle'),
+            description: t('crmCampaigns.errors.invalidAmountDescription'),
             variant: 'danger',
           });
           return;
         }
         if (!form.fecha_inicio) {
           push({
-            title: 'Fecha de inicio requerida',
-            description: 'Selecciona una fecha de inicio para la campana.',
+            title: t('crmCampaigns.errors.startDateTitle'),
+            description: t('crmCampaigns.errors.startDateDescription'),
             variant: 'warning',
           });
           return;
         }
         if (!form.fecha_fin || form.fecha_fin < form.fecha_inicio) {
           push({
-            title: 'Rango de fechas invalido',
-            description: 'La fecha de cierre no puede ser anterior a la fecha de inicio.',
+            title: t('crmCampaigns.errors.dateRangeTitle'),
+            description: t('crmCampaigns.errors.dateRangeDescription'),
             variant: 'danger',
           });
           return;
@@ -167,8 +252,8 @@ export const Campanas = () => {
       } catch (error) {
         if ((error as Error).message !== 'MISSING_SESSION_IDS') {
           push({
-            title: 'No se pudo crear la campana',
-            description: 'Vuelve a intentarlo en unos segundos.',
+            title: t('crmCampaigns.errors.createFailedTitle'),
+            description: t('crmCampaigns.errors.createFailedDescription'),
             variant: 'danger',
           });
         }
@@ -180,32 +265,39 @@ export const Campanas = () => {
   const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editingCampaign) return;
+    let sessionIds: ReturnType<typeof resolveSessionIds>;
+    try {
+      sessionIds = resolveSessionIds();
+    } catch {
+      return;
+    }
     const commissionValue = Number(editForm.comision);
     if (Number.isNaN(commissionValue) || commissionValue < 0) {
       push({
-        title: 'Monto invalido',
-        description: 'Ingresa un monto valido para la comision.',
+        title: t('crmCampaigns.errors.invalidAmountTitle'),
+        description: t('crmCampaigns.errors.invalidAmountDescription'),
         variant: 'danger',
       });
       return;
     }
     if (!editForm.fecha_inicio) {
       push({
-        title: 'Fecha de inicio requerida',
-        description: 'Selecciona una fecha de inicio para la campana.',
+        title: t('crmCampaigns.errors.startDateTitle'),
+        description: t('crmCampaigns.errors.startDateDescription'),
         variant: 'warning',
       });
       return;
     }
     if (!editForm.fecha_fin || editForm.fecha_fin < editForm.fecha_inicio) {
       push({
-        title: 'Rango de fechas invalido',
-        description: 'La fecha de cierre no puede ser anterior a la fecha de inicio.',
+        title: t('crmCampaigns.errors.dateRangeTitle'),
+        description: t('crmCampaigns.errors.dateRangeDescription'),
         variant: 'danger',
       });
       return;
     }
     updateCampaign.mutate({
+      ...sessionIds,
       nombre: editForm.nombre.trim(),
       descripcion: editForm.descripcion.trim() || undefined,
       ubicacion: editForm.ubicacion.trim() || undefined,
@@ -217,6 +309,7 @@ export const Campanas = () => {
   };
 
   const openEditDialog = (campaign: Campaign) => {
+    if (!isAdmin) return;
     setEditingCampaign(campaign);
     setEditForm({
       nombre: campaign.nombre ?? '',
@@ -230,32 +323,47 @@ export const Campanas = () => {
       fecha_fin: campaign.fecha_fin ?? '',
       estado: campaign.estado ?? 1,
     });
+    setAutoDeactivateSelected(Boolean(autoCloseMap[campaign.id_campania]));
     setEditDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!isAdmin || !campaigns.length || !Object.keys(autoCloseMap).length) return;
+    const today = new Date();
+    Object.entries(autoCloseMap).forEach(([key, enabled]) => {
+      if (!enabled) return;
+      const campaignId = Number(key);
+      if (Number.isNaN(campaignId)) return;
+      const campaign = campaigns.find((item) => item.id_campania === campaignId);
+      if (!campaign) return;
+      const endDate = new Date(campaign.fecha_fin);
+      if (endDate <= today && Number(campaign.estado) !== 0 && !isAutoDeactivating) {
+        autoDeactivateCampaignMutate(campaignId);
+      }
+    });
+  }, [autoCloseMap, campaigns, isAdmin, autoDeactivateCampaignMutate, isAutoDeactivating]);
 
   return (
     <section className="space-y-6 text-content">
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-content">Campanas</h1>
-          <p className="text-sm text-content-muted">
-            Configura campanas y controla su periodo de vigencia.
-          </p>
+          <h1 className="text-3xl font-semibold text-content">{t('crmCampaigns.title')}</h1>
+          <p className="text-sm text-content-muted">{t('crmCampaigns.subtitle')}</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>Nueva campana</Button>
+        {isAdmin && <Button onClick={() => setDialogOpen(true)}>{t('crmCampaigns.actions.new')}</Button>}
       </header>
 
       {isLoading ? (
-        <p className="text-sm text-content-muted">Cargando campanas...</p>
+        <p className="text-sm text-content-muted">{t('crmCampaigns.loading')}</p>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Comision</TableHead>
-              <TableHead>Vigencia</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
+              <TableHead>{t('crmCampaigns.table.name')}</TableHead>
+              <TableHead>{t('crmCampaigns.table.commission')}</TableHead>
+              <TableHead>{t('crmCampaigns.table.validity')}</TableHead>
+              <TableHead>{t('crmCampaigns.table.status')}</TableHead>
+              <TableHead className="text-right">{t('crmCampaigns.table.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -274,21 +382,32 @@ export const Campanas = () => {
                     {formatDate(campaign.fecha_inicio)} - {formatDate(campaign.fecha_fin)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getStatusBadgeVariant(campaign.estado)}>
-                      {normalizeStatusLabel(campaign.estado, 'Sin estado')}
-                    </Badge>
+                    <span className="inline-flex items-center gap-2">
+                      <Badge variant={getStatusBadgeVariant(campaign.estado)}>
+                        {normalizeStatusLabel(campaign.estado, t('crmCampaigns.table.noStatus'))}
+                      </Badge>
+                      {autoCloseMap[campaign.id_campania] && (
+                        <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
+                          {t('crmCampaigns.table.autoBadge')}
+                        </span>
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => openEditDialog(campaign)}>
-                      Editar
-                    </Button>
+                    {isAdmin ? (
+                      <Button size="sm" variant="outline" onClick={() => openEditDialog(campaign)}>
+                        {t('crmCampaigns.actions.edit')}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-content-subtle">{t('crmCampaigns.actions.noAccess')}</span>
+                    )}
                   </TableCell>
                 </TableRow>
               );
             })}
             {!campaigns.length && (
               <TableRow>
-                <TableCell colSpan={5}>Aun no hay campanas registradas.</TableCell>
+                <TableCell colSpan={5}>{t('crmCampaigns.table.empty')}</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -301,29 +420,29 @@ export const Campanas = () => {
           setDialogOpen(open);
           if (!open) resetForm();
         }}
-        title="Registrar campana"
-        description="Completa los datos de la nueva campana."
+        title={t('crmCampaigns.dialogs.createTitle')}
+        description={t('crmCampaigns.dialogs.createDescription')}
       >
         <form className="space-y-3" onSubmit={handleSubmit}>
           <Input
-            label="Nombre"
+            label={t('crmCampaigns.form.name')}
             required
             value={form.nombre}
             onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
           />
-          <Textarea
-            label="Descripcion"
+          <TextArea
+            label={t('crmCampaigns.form.description')}
             minRows={4}
             value={form.descripcion}
             onChange={(event) => setForm((prev) => ({ ...prev, descripcion: event.target.value }))}
           />
           <Input
-            label="Ubicacion"
+            label={t('crmCampaigns.form.location')}
             value={form.ubicacion}
             onChange={(event) => setForm((prev) => ({ ...prev, ubicacion: event.target.value }))}
           />
           <Input
-            label="Comision por referido (S/)"
+            label={t('crmCampaigns.form.commission')}
             type="number"
             step="0.01"
             min="0"
@@ -332,7 +451,7 @@ export const Campanas = () => {
             onChange={(event) => setForm((prev) => ({ ...prev, comision: event.target.value }))}
           />
           <Input
-            label="Fecha de inicio"
+            label={t('crmCampaigns.form.startDate')}
             type="date"
             required
             value={form.fecha_inicio}
@@ -347,7 +466,7 @@ export const Campanas = () => {
             }}
           />
           <Input
-            label="Fecha de cierre"
+            label={t('crmCampaigns.form.endDate')}
             type="date"
             required
             min={form.fecha_inicio || undefined}
@@ -361,6 +480,15 @@ export const Campanas = () => {
               }));
             }}
           />
+          <Select
+            label={t('crmCampaigns.form.status')}
+            value={String(form.estado)}
+            onChange={(event) => setForm((prev) => ({ ...prev, estado: Number(event.target.value) }))}
+            options={[
+              { value: 1, label: t('crmCampaigns.status.active') },
+              { value: 0, label: t('crmCampaigns.status.inactive') },
+            ]}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
@@ -370,10 +498,10 @@ export const Campanas = () => {
                 resetForm();
               }}
             >
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button type="submit" isLoading={createCampaign.isLoading}>
-              Guardar
+              {t('common.save')}
             </Button>
           </div>
         </form>
@@ -386,31 +514,32 @@ export const Campanas = () => {
           if (!open) {
             setEditingCampaign(null);
             setEditForm(buildInitialForm());
+            setAutoDeactivateSelected(false);
           }
         }}
-        title="Editar campana"
-        description="Actualiza los detalles de la campana."
+        title={t('crmCampaigns.dialogs.editTitle')}
+        description={t('crmCampaigns.dialogs.editDescription')}
       >
         <form className="space-y-3" onSubmit={handleEditSubmit}>
           <Input
-            label="Nombre"
+            label={t('crmCampaigns.form.name')}
             required
             value={editForm.nombre}
             onChange={(event) => setEditForm((prev) => ({ ...prev, nombre: event.target.value }))}
           />
-          <Textarea
-            label="Descripcion"
+          <TextArea
+            label={t('crmCampaigns.form.description')}
             minRows={4}
             value={editForm.descripcion}
             onChange={(event) => setEditForm((prev) => ({ ...prev, descripcion: event.target.value }))}
           />
           <Input
-            label="Ubicacion"
+            label={t('crmCampaigns.form.location')}
             value={editForm.ubicacion}
             onChange={(event) => setEditForm((prev) => ({ ...prev, ubicacion: event.target.value }))}
           />
           <Input
-            label="Comision por referido (S/)"
+            label={t('crmCampaigns.form.commission')}
             type="number"
             step="0.01"
             min="0"
@@ -419,7 +548,7 @@ export const Campanas = () => {
             onChange={(event) => setEditForm((prev) => ({ ...prev, comision: event.target.value }))}
           />
           <Input
-            label="Fecha de inicio"
+            label={t('crmCampaigns.form.startDate')}
             type="date"
             required
             value={editForm.fecha_inicio}
@@ -434,7 +563,7 @@ export const Campanas = () => {
             }}
           />
           <Input
-            label="Fecha de cierre"
+            label={t('crmCampaigns.form.endDate')}
             type="date"
             required
             min={editForm.fecha_inicio || undefined}
@@ -448,12 +577,36 @@ export const Campanas = () => {
               }));
             }}
           />
+          <Select
+            label={t('crmCampaigns.form.status')}
+            value={String(editForm.estado)}
+            onChange={(event) => setEditForm((prev) => ({ ...prev, estado: Number(event.target.value) }))}
+            options={[
+              { value: 1, label: t('crmCampaigns.status.active') },
+              { value: 0, label: t('crmCampaigns.status.inactive') },
+            ]}
+          />
+          <label className="flex items-start gap-3 rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm text-content">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-border"
+              checked={autoDeactivateSelected}
+              onChange={(event) => setAutoDeactivateSelected(event.target.checked)}
+              disabled={!isAdmin}
+            />
+            <span>
+              <strong className="block text-content">{t('crmCampaigns.form.autoDeactivateTitle')}</strong>
+              <span className="text-xs text-content-muted">
+                {t('crmCampaigns.form.autoDeactivateDescription')}
+              </span>
+            </span>
+          </label>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button type="submit" isLoading={updateCampaign.isLoading}>
-              Guardar cambios
+              {t('common.saveChanges')}
             </Button>
           </div>
         </form>

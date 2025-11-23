@@ -30,7 +30,10 @@ export const APP_ROUTES = {
     empresas: '/crm/empresas',
     campanas: '/crm/campanas',
     leads: '/crm/leads',
+    leadsKanban: '/crm/leads/kanban',
     usuarios: '/crm/usuarios',
+    comisiones: '/crm/comisiones',
+    iaConfig: '/crm/configuracion/ia',
     supervisor: {
       home: '/crm/supervisor/home',
       leads: '/crm/supervisor/leads',
@@ -38,6 +41,7 @@ export const APP_ROUTES = {
     vendedor: {
       home: '/crm/vendedor/home',
       leads: '/crm/vendedor/leads',
+      kanban: '/crm/vendedor/kanban',
     },
     analitica: '/crm/analitica/home',
     sinAcceso: '/crm/sin-acceso',

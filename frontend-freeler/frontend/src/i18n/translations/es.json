@@ -4,6 +4,7 @@
     "freelerCrm": "Freeler CRM",
     "freelerCrmInitials": "FC",
     "cancel": "Cancelar",
+    "save": "Guardar",
     "saveChanges": "Guardar cambios",
     "editProfile": "Editar perfil",
     "profile": "Perfil",
@@ -14,24 +15,51 @@
     "loading": "Cargando...",
     "actions": "Acciones",
     "avatarAlt": "Avatar de {{name}}",
-    "avatar": "Avatar"
+    "avatar": "Avatar",
+    "all": "Todos",
+    "allMonths": "Todos los meses",
+    "allOrigins": "Todos los origenes",
+    "allVendors": "Todos los vendedores",
+    "allStatuses": "Todos los estados",
+    "months": {
+      "1": "Enero",
+      "2": "Febrero",
+      "3": "Marzo",
+      "4": "Abril",
+      "5": "Mayo",
+      "6": "Junio",
+      "7": "Julio",
+      "8": "Agosto",
+      "9": "Septiembre",
+      "10": "Octubre",
+      "11": "Noviembre",
+      "12": "Diciembre"
+    }
   },
   "nav": {
-    "dashboard": "Dashboard",
+    "dashboard": "Panel",
     "companies": "Empresas",
     "campaigns": "Campañas",
     "leads": "Leads",
     "users": "Usuarios",
-    "analytics": "Analítica",
+    "analytics": "Dashboard BI",
+    "aiConfig": "IA Coach",
+    "commissions": "Comisiones",
     "logout": "Salir",
-    "manageUsers": "Gestionar usuarios"
+    "manageUsers": "Gestionar usuarios",
+    "kanban": "Tablero Kanban"
   },
   "auth": {
     "login": "Iniciar sesión",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "register": "Registrarse"
   },
   "crmShell": {
     "toggleSidebar": "Alternar barra lateral",
+    "collapseNav": "Contraer navegación",
+    "expandNav": "Expandir navegación",
+    "hideBottomNav": "Ocultar menú inferior",
+    "showBottomNav": "Mostrar menú inferior",
     "myProfile": "Mi perfil",
     "role": "Rol",
     "companyData": "Datos de la empresa",
@@ -90,6 +118,345 @@
       "legalRepresentative": "Representante legal"
     }
   },
+  "crmPanel": {
+    "title": "Panel administrativo",
+    "subtitle": "Vista general del estado de tu operación y tu equipo.",
+    "emptyCompany": "No pudimos identificar tu empresa. Vuelve a iniciar sesión.",
+    "loading": "Cargando resumen...",
+    "error": "No se pudo cargar el panel. Intenta nuevamente.",
+    "kpis": {
+      "campaigns": "Total de campañas",
+      "activeUsers": "Usuarios activos",
+      "vendors": "Vendedores",
+      "topSeller": "Vendedor destacado",
+      "monitoredLeads": "Leads monitoreados",
+      "wonLeads": "Leads ganados",
+      "lostLeads": "Leads perdidos",
+      "topSellerLabel": "leads ganados"
+    }
+  },
+  "crmVendorHome": {
+    "title": "Mi desempeño",
+    "subtitle": "Seguimiento rápido de los leads asignados.",
+    "emptyState": {
+      "title": "Sesión requerida",
+      "description": "Inicia sesión con tu cuenta de vendedor para ver tus resultados."
+    },
+    "kpis": {
+      "assigned": "Leads asignados",
+      "inProgress": "En gestión",
+      "won": "Ganados",
+      "lost": "Perdidos",
+      "conversion": "Tasa de conversión",
+      "unassigned": "Sin asignar",
+      "newLeads": "Nuevos (7 días)"
+    }
+  },
+  "crmVendorLeads": {
+    "title": "Mis leads",
+    "subtitle": "Consulta, filtra y gestiona los leads que tienes asignados."
+  },
+  "crmKanban": {
+    "title": "Tablero Kanban",
+    "subtitle": "Arrastra los leads entre etapas para actualizar su estado.",
+    "actions": {
+      "refresh": "Actualizar",
+      "editLead": "Editar lead"
+    },
+    "filters": {
+      "searchLabel": "Buscar",
+      "searchPlaceholder": "Nombre, correo o telefono",
+      "campaign": "Campana",
+      "campaignAll": "Todas las campanas",
+      "campaignNone": "Sin campana",
+      "detail": "Detalle en tarjetas",
+      "detailOrigin": "Origen",
+      "detailCity": "Ciudad",
+      "detailPhone": "Telefono",
+      "detailEmail": "Correo",
+      "detailPlaceholder": "Selecciona los detalles",
+      "onlyUnassigned": "Ver sin asignar",
+      "onlyUnassignedActive": "Mostrando sin asignar",
+      "showControls": "Mostrar filtros",
+      "hideControls": "Ocultar filtros"
+    },
+    "messages": {
+      "loading": "Cargando leads...",
+      "empty": "No hay leads para mostrar.",
+      "columnEmpty": "Sin leads en esta etapa",
+      "confirmWon": "Confirmas que el lead ha sido ganado? Esto generara la comision correspondiente.",
+      "statusUnknown": "No pudimos detectar el estado destino.",
+      "statusUpdatedTitle": "Lead actualizado",
+      "statusUpdatedDescription": "El estado del lead se actualizo correctamente."
+    },
+    "defaults": {
+      "columns": {
+        "prospect": "Prospecto",
+        "inProgress": "En gestion",
+        "won": "Ganado",
+        "lost": "Perdido"
+      },
+      "status": {
+        "pending": "Pendiente",
+        "assigned": "Asignado",
+        "contact": "Contactado",
+        "inProgress": "En gestion",
+        "lost": "Perdido",
+        "won": "Ganado"
+      },
+      "fallbackCampaign": "Campana",
+      "noCampaign": "Sin campana asignada",
+      "leadName": "Lead sin nombre",
+      "details": {
+        "email": "Sin correo",
+        "phone": "Sin telefono",
+        "city": "Sin ciudad",
+        "origin": "Origen no registrado"
+      }
+    }
+  },
+  "crmAnalytics": {
+    "title": "Dashboard BI",
+    "subtitle": "Analiza el desempeno comercial y detecta oportunidades rapidamente.",
+    "loading": "Cargando dashboard...",
+    "error": "No se pudo cargar el dashboard. Revisa tu conexion.",
+    "empty": "No hay datos para los filtros seleccionados.",
+    "kpis": {
+      "leads": "Leads filtrados",
+      "won": "Ganados",
+      "lost": "Perdidos"
+    },
+    "filters": {
+      "title": "Filtros generales",
+      "show": "Mostrar filtros",
+      "hide": "Ocultar filtros",
+      "year": "Año",
+      "month": "Mes",
+      "origin": "Origen",
+      "campaign": "Campaña",
+      "vendor": "Vendedor",
+      "status": "Estado"
+    },
+    "charts": {
+      "commissionLine": "Comisiones pagadas por mes",
+      "commissionHint": "Basado en las comisiones registradas en el CRM.",
+      "leadsByCampaign": "Leads por campaña",
+      "leadsByOrigin": "Leads por origen (todos los meses)",
+      "leadsByOriginMonthHint": "Distribución acumulada del origen de leads (sin filtrar por mes).",
+      "noOrigin": "Sin origen",
+      "leadsByStatus": "Embudo de estados",
+      "vendorPerformance": "Rendimiento por vendedor",
+      "vendorPerformanceHint": "Monitorea el desempeño de cada vendedor con indicadores claves."
+    },
+    "vendorCard": {
+      "assigned": "Asignados",
+      "lost": "Perdidos",
+      "won": "Ganados",
+      "winRate": "Tasa de ganados"
+    }
+  },
+  "crmUsers": {
+    "title": "Usuarios de empresa",
+    "subtitle": "Controla qué usuarios tienen acceso al CRM y define su rol dentro de la empresa.",
+    "loading": "Cargando usuarios...",
+    "actions": {
+      "newUser": "Nuevo usuario",
+      "register": "Registrar",
+      "edit": "Editar"
+    },
+    "table": {
+      "name": "Nombre",
+      "email": "Correo",
+      "role": "Rol",
+      "status": "Estado",
+      "empty": "Aún no hay usuarios registrados.",
+      "noRole": "Sin rol",
+      "noStatus": "Sin estado"
+    },
+    "form": {
+      "firstNamePlaceholder": "Escribe los nombres",
+      "lastNamePlaceholder": "Escribe los apellidos",
+      "emailPlaceholder": "correo@empresa.com",
+      "tempPasswordLabel": "Contraseña temporal",
+      "tempPasswordPlaceholder": "Define una contraseña temporal",
+      "updatePasswordLabel": "Actualizar contraseña",
+      "updatePasswordPlaceholder": "Ingresa una nueva contraseña",
+      "updatePasswordHelper": "Deja en blanco para mantener la contraseña actual."
+    },
+    "dialogs": {
+      "createTitle": "Registrar usuario",
+      "createDescription": "Completa la información para invitar a un miembro del equipo.",
+      "editTitle": "Editar usuario",
+      "editDescription": "Actualiza la información del usuario seleccionado."
+    },
+    "errors": {
+      "missingCompanyTitle": "No se pudo identificar la empresa",
+      "missingCompanyDescription": "Vuelve a iniciar sesión e intenta nuevamente.",
+      "incompleteTitle": "Campos incompletos",
+      "createIncomplete": "Completa todos los campos obligatorios.",
+      "editIncomplete": "Completa al menos nombres, apellidos y correo."
+    },
+    "toasts": {
+      "createSuccess": {
+        "title": "Usuario creado",
+        "description": "Cuenta registrada con éxito.",
+        "descriptionNamed": "{{name}} fue registrado correctamente."
+      },
+      "createError": {
+        "title": "No se pudo crear el usuario",
+        "description": "Revisa los datos e intenta nuevamente."
+      },
+      "updateSuccess": {
+        "title": "Usuario actualizado",
+        "description": "Los datos se guardaron correctamente.",
+        "descriptionNamed": "Actualizaste la cuenta de {{name}}."
+      },
+      "updateError": {
+        "title": "No se pudo actualizar el usuario",
+        "description": "Intenta nuevamente en unos minutos."
+      }
+    }
+  },
+  "crmCommissions": {
+    "title": "Comisiones",
+    "subtitle": "Revisa las comisiones generadas por los freelers y marca los pagos según corresponda.",
+    "filters": {
+      "status": {
+        "label": "Estado",
+        "all": "Todas"
+      }
+    },
+    "status": {
+      "pending": "Pendiente",
+      "requested": "Solicitada",
+      "paid": "Pagada"
+    },
+    "cards": {
+      "pending": "Pendiente",
+      "requested": "Solicitada",
+      "paid": "Pagada",
+      "total": "Total"
+    },
+    "table": {
+      "freeler": "Freeler",
+      "campaign": "Campaña",
+      "amount": "Monto",
+      "status": "Estado",
+      "paymentDate": "Fecha de pago",
+      "noFreeler": "Sin referidor",
+      "noCampaign": "Sin campaña",
+      "markPending": "Marcar pendiente",
+      "markPaid": "Marcar pagada",
+      "empty": "No se encontraron comisiones para los filtros seleccionados."
+    },
+    "toasts": {
+      "updateSuccess": {
+        "title": "Estado actualizado",
+        "description": "La comisión se actualizó correctamente."
+      },
+      "updateError": {
+        "title": "No se pudo actualizar",
+        "description": "Intenta nuevamente en unos minutos."
+      }
+    }
+  },
+  "crmCampaigns": {
+    "title": "Campañas",
+    "subtitle": "Configura campañas y controla su periodo de vigencia.",
+    "loading": "Cargando campañas...",
+    "actions": {
+      "new": "Nueva campaña",
+      "edit": "Editar",
+      "noAccess": "Sin acceso"
+    },
+    "table": {
+      "name": "Nombre",
+      "commission": "Comisión",
+      "validity": "Vigencia",
+      "status": "Estado",
+      "actions": "Acciones",
+      "noStatus": "Sin estado",
+      "autoBadge": "Auto",
+      "empty": "Aún no hay campañas registradas."
+    },
+    "form": {
+      "name": "Nombre",
+      "description": "Descripción",
+      "location": "Ubicación",
+      "commission": "Comisión por referido (S/)",
+      "startDate": "Fecha de inicio",
+      "endDate": "Fecha de cierre",
+      "status": "Estado",
+      "autoDeactivateTitle": "Desactivar automá!ticamente al cierre",
+      "autoDeactivateDescription": "La campaña pasará a inactiva cuando se alcance la fecha de cierre."
+    },
+    "status": {
+      "active": "Activa",
+      "inactive": "Inactiva"
+    },
+    "dialogs": {
+      "createTitle": "Registrar campaña",
+      "createDescription": "Completa los datos de la nueva campaña.",
+      "editTitle": "Editar campaña",
+      "editDescription": "Actualiza los detalles de la campaña."
+    },
+    "errors": {
+      "missingCompanyTitle": "No se pudo identificar la empresa",
+      "missingCompanyDescription": "Vuelve a iniciar sesión para registrar una campaña.",
+      "invalidAmountTitle": "Monto inválido",
+      "invalidAmountDescription": "Ingresa un monto válido para la comisión.",
+      "startDateTitle": "Fecha de inicio requerida",
+      "startDateDescription": "Selecciona una fecha de inicio para la campaña.",
+      "dateRangeTitle": "Rango de fechas inválido",
+      "dateRangeDescription": "La fecha de cierre no puede ser anterior a la fecha de inicio.",
+      "createFailedTitle": "No se pudo crear la campaña",
+      "createFailedDescription": "Vuelve a intentarlo en unos segundos.",
+      "updateFailedTitle": "No se pudo actualizar la campaña",
+      "updateFailedDescription": "Revisa los datos e inténtalo nuevamente.",
+      "deactivateFailedTitle": "No se pudo desactivar la campaña",
+      "deactivateFailedDescription": "Intenta actualizarla manualmente."
+    },
+    "toasts": {
+      "createSuccess": {
+        "title": "Campaña creada",
+        "description": "Campaña registrada con éxito.",
+        "descriptionNamed": "?{{name}}? se registró correctamente."
+      },
+      "updateSuccess": {
+        "title": "Campaña actualizada",
+        "description": "Los cambios se guardaron correctamente."
+      },
+      "autoDeactivate": {
+        "title": "Campaña desactivada automáticamente",
+        "description": "La fecha de cierre se alcanzó."
+      }
+    }
+  },
+  "crmLeads": {
+    "filters": {
+      "origin": {
+        "label": "Filtrar por origen",
+        "all": "Todos los orígenes"
+      },
+      "campaign": {
+        "label": "Filtrar por campaña",
+        "all": "Todas las campañas",
+        "none": "Sin campaña"
+      },
+      "status": {
+        "label": "Filtrar por estado",
+        "all": "Todos los estados"
+      },
+      "vendor": {
+        "label": "Filtrar por vendedor",
+        "all": "Todos los vendedores"
+      },
+      "city": {
+        "label": "Filtrar por ciudad",
+        "all": "Todas las ciudades"
+      }
+    }
+  },
   "referidosHome": {
     "title": "Campañas disponibles",
     "subtitle": "Explora oportunidades y registra tus referidos para ganar comisiones.",
@@ -105,5 +472,11 @@
     "defaultPlaceholder": "Buscar...",
     "submit": "Buscar",
     "clear": "Limpiar"
+  },
+  "referidosNav": {
+    "campaigns": "Campañas",
+    "myLeads": "Mis referidos",
+    "dashboard": "Dashboard",
+    "training": "Capacitación"
   }
 }

@@ -1,4 +1,4 @@
-import { api } from './api';
+﻿import { api } from './api';
 
 export type LeadDraft = {
   nombres?: string;
@@ -83,6 +83,34 @@ export type LeadImportJob = {
   errors: Array<{ row: number; issues: string[] }>;
   startedAt?: number;
   finishedAt?: number;
+};
+
+export type LeadAssignmentHistoryEntry = {
+  id_asignacion: number;
+  id_lead: number;
+  fecha_asignacion: string;
+  estado_asignacion: number;
+  estado?: {
+    id_estado_lead: number;
+    nombre: string | null;
+  } | null;
+  actor?: {
+    id_usuario_empresa: number;
+    nombres?: string | null;
+    apellidos?: string | null;
+    email?: string | null;
+  } | null;
+  asignado?: {
+    id_usuario_empresa: number;
+    nombres?: string | null;
+    apellidos?: string | null;
+    email?: string | null;
+  } | null;
+};
+
+export type LeadAssignmentHistory = {
+  leadId: number;
+  entries: LeadAssignmentHistoryEntry[];
 };
 
 const mapLeadPayload = (payload: Partial<LeadDraft>) => {
@@ -294,27 +322,106 @@ export const LeadService = {
     const { data } = await api.get(`/leads/import/status/${importId}`);
     return data as LeadImportJob;
   },
-  // Descarga la plantilla oficial de importación usando el token del usuario
+  // Descarga la plantilla oficial de importaciÃ³n usando el token del usuario
   async downloadImportTemplate() {
     const { data } = await api.get('/leads/import/template', {
       responseType: 'blob',
     });
     return data as Blob;
   },
+  async collectAll(params: Record<string, unknown> = {}, pageSize = 200) {
+    let page = 1;
+    const items: Lead[] = [];
+    let total = 0;
+    while (true) {
+      const response = await this.listAll({ ...params, page, limit: pageSize });
+      const batch = unwrapLeadCollection<Lead>(response);
+      items.push(...batch);
+      const meta = (response as Partial<LeadPaginatedResponse>) ?? {};
+      const responseTotal =
+        typeof meta.total === 'number' ? meta.total : items.length;
+      total = responseTotal;
+      const responseLimit =
+        typeof meta.limit === 'number' && meta.limit > 0 ? meta.limit : pageSize;
+      if (batch.length < responseLimit || items.length >= total) {
+        break;
+      }
+      page += 1;
+    }
+    return { data: items, total };
+  },
+  async collectByEmpresa(params: Record<string, unknown> = {}, pageSize = 200) {
+    let page = 1;
+    const items: Lead[] = [];
+    let total = 0;
+    while (true) {
+      const response = await this.listByEmpresa({ ...params, page, limit: pageSize });
+      const batch = unwrapLeadCollection<Lead>(response);
+      items.push(...batch);
+      const meta = (response as Partial<LeadPaginatedResponse>) ?? {};
+      const responseTotal =
+        typeof meta.total === 'number' ? meta.total : items.length;
+      total = responseTotal;
+      const responseLimit =
+        typeof meta.limit === 'number' && meta.limit > 0 ? meta.limit : pageSize;
+      if (batch.length < responseLimit || items.length >= total) {
+        break;
+      }
+      page += 1;
+    }
+    return { data: items, total };
+  },
+  async collectForEmpresa(
+    companyId: number,
+    params: Record<string, unknown> = {},
+    pageSize = 200,
+  ) {
+    return this.collectByEmpresa({ ...params, id_empresa: companyId }, pageSize);
+  },
   async listVendorUniverse(options: {
     filters?: Record<string, unknown>;
     includeEmpresa?: boolean;
     freelerUserId?: number | null;
+    empresaUserId?: number | null;
   } = {}) {
-    const { filters = {}, includeEmpresa = true, freelerUserId } = options;
-    const [assignedRaw, companyRaw, freelerRaw] = await Promise.all([
-      this.listAssignedToMe(filters),
-      includeEmpresa ? this.listByEmpresa(filters) : Promise.resolve(null),
-      freelerUserId ? this.listMine(freelerUserId, filters) : Promise.resolve(null),
+    const { filters = {}, includeEmpresa = true, freelerUserId, empresaUserId } = options;
+    const { asignado_a_usuario_empresa_id: _omitAssignFilter, ...assignedFilters } = filters;
+    const assignedPromise = this.listAssignedToMe(assignedFilters);
+    const companyPromise = includeEmpresa
+      ? this.listByEmpresa({
+          ...filters,
+          solo_referidos: false,
+          ...(empresaUserId ? { asignado_a_usuario_empresa_id: empresaUserId } : {}),
+        })
+      : Promise.resolve(null);
+    const freelerPromise = freelerUserId
+      ? this.listMine(freelerUserId, filters)
+      : Promise.resolve(null);
+    const [assignedResult, companyResult, freelerResult] = await Promise.allSettled([
+      assignedPromise,
+      companyPromise,
+      freelerPromise,
     ]);
-    const assigned = unwrapLeadCollection<Lead>(assignedRaw);
-    const company = unwrapLeadCollection<Lead>(companyRaw);
-    const freeler = unwrapLeadCollection<Lead>(freelerRaw);
+    const assigned =
+      assignedResult.status === 'fulfilled'
+        ? unwrapLeadCollection<Lead>(assignedResult.value)
+        : [];
+    const company =
+      companyResult.status === 'fulfilled'
+        ? unwrapLeadCollection<Lead>(companyResult.value)
+        : [];
+    const freeler =
+      freelerResult.status === 'fulfilled'
+        ? unwrapLeadCollection<Lead>(freelerResult.value)
+        : [];
     return mergeLeadCollections(assigned, company, freeler);
+  },
+  async assignLead(payload: { leadId: number; usuarioEmpresaId: number; asignarAUsuarioEmpresaId: number }) {
+    const { data } = await api.post('/leads/assign', payload);
+    return data;
+  },
+  async getAssignmentHistory(leadId: number) {
+    const { data } = await api.get(`/leads/${leadId}/history`);
+    return data as LeadAssignmentHistory;
   },
 };

@@ -1,4 +1,9 @@
-import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UpdateLeadStatusDto } from '../../infrastructure/dto/update-lead-status.dto';
@@ -8,6 +13,9 @@ import {
 } from '../interfaces/lead.repository.interface';
 import LeadsPermissionService from '../services/leads-permission.service';
 import { AsignacionEntity } from '../../infrastructure/entities/asignacion.entity';
+import CommissionAccountingService, {
+  LEAD_ESTADO_GANADO,
+} from '../../../comisiones/application/services/commission-accounting.service';
 
 @Injectable()
 export class UpdateLeadStatusUseCase {
@@ -17,10 +25,13 @@ export class UpdateLeadStatusUseCase {
     private readonly permission: LeadsPermissionService,
     @InjectRepository(AsignacionEntity)
     private readonly asignRepo: Repository<AsignacionEntity>,
+    private readonly commissionAccounting: CommissionAccountingService,
   ) {}
 
   async execute(dto: UpdateLeadStatusDto) {
     const actor = await this.permission.ensureEmpresaActor(dto.usuarioEmpresaId);
+    const lead = await this.leadRepo.findById(dto.leadId);
+    if (!lead) throw new NotFoundException('LEAD_NOT_FOUND');
 
     const activeAssignment = await this.asignRepo.findOne({
       where: { id_lead: dto.leadId, estado: 1 },
@@ -48,6 +59,12 @@ export class UpdateLeadStatusUseCase {
     const updated = await this.leadRepo.update(dto.leadId, {
       id_estado_lead: dto.id_estado_lead,
     });
+    if (dto.id_estado_lead === LEAD_ESTADO_GANADO) {
+      await this.commissionAccounting.ensureCommissionForLead({
+        ...lead,
+        id_estado_lead: LEAD_ESTADO_GANADO,
+      });
+    }
     return updated;
   }
 }

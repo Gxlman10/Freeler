@@ -7,6 +7,8 @@ export interface IComisionRepository {
   create(data: Partial<ComisionEntity>): Promise<ComisionEntity>;
   findById(id: number): Promise<ComisionEntity | null>;
   findByLeadId(leadId: number): Promise<ComisionEntity | null>;
+  findManyByFreeler(freelerId: number): Promise<ComisionEntity[]>;
+  findPendingByFreeler(freelerId: number, ids?: number[]): Promise<ComisionEntity[]>;
   update(id: number, data: Partial<ComisionEntity>): Promise<ComisionEntity>;
   paginate(
     filters: FindComisionesDto,

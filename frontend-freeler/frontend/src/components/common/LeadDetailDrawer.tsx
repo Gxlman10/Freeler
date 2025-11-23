@@ -11,13 +11,7 @@ type LeadDetailDrawerProps = {
   footer?: ReactNode;
 };
 
-export const LeadDetailDrawer = ({
-  open,
-  onClose,
-  title,
-  children,
-  footer,
-}: LeadDetailDrawerProps) => {
+export const LeadDetailDrawer = ({ open, onClose, title, children, footer }: LeadDetailDrawerProps) => {
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -32,22 +26,27 @@ export const LeadDetailDrawer = ({
   if (!open) return null;
 
   return createPortal(
-    // Drawer lateral con fondo difuminado coherente en ambos temas
-    <div className="bg-overlay-blur fixed inset-0 z-[var(--z-drawer)] flex justify-end">
-      <div className="bg-surface-translucent h-full w-full max-w-xl overflow-y-auto border-l border-border shadow-card-strong">
-        <header className="bg-surface-header flex items-center justify-between border-b border-border-subtle px-6 py-4">
-          <h2 className="text-lg font-semibold text-content">{title}</h2>
+    <div
+      className="fixed inset-0 z-[var(--z-drawer)] bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+      aria-label={title}
+    >
+      <aside
+        className={cn(
+          'ml-auto flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-border-subtle bg-surface shadow-card',
+          'animate-in slide-in-from-right duration-200',
+        )}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="flex items-center justify-between border-b border-border-subtle px-5 py-4">
+          <h2 className="text-base font-semibold text-content">{title}</h2>
           <Button variant="ghost" onClick={onClose}>
             Cerrar
           </Button>
         </header>
-        <div className={cn('px-6 py-4 text-sm text-content')}>{children}</div>
-        {footer && (
-          <footer className="border-t border-border-subtle px-6 py-4">
-            {footer}
-          </footer>
-        )}
-      </div>
+        <div className="px-5 py-4 text-sm text-content">{children}</div>
+        {footer && <footer className="border-t border-border-subtle px-5 py-4">{footer}</footer>}
+      </aside>
     </div>,
     document.body,
   );

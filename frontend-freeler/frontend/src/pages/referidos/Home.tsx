@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
 import { CampaignService } from '@/services/campaign.service';
 import type { Campaign } from '@/services/campaign.service';
 import { SearchBar } from '@/components/common/SearchBar';
@@ -83,27 +82,20 @@ export const Home = () => {
 
   return (
     <div className="space-y-8">
-      <section className="mx-auto max-w-4xl rounded-2xl border border-border bg-surface p-4 shadow-sm transition-colors sm:p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="hidden md:block">
+      <section className="space-y-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-1">
             <h1 className="text-2xl font-semibold text-content">{t('referidosHome.title')}</h1>
             <p className="text-sm text-content-muted">{t('referidosHome.subtitle')}</p>
           </div>
-          <Button
-            variant="ghost"
-            className="w-full justify-center md:w-auto"
-            onClick={() => refetch()}
-            leftIcon={<RefreshCw className="h-4 w-4" />}
-          >
-            {t('referidosHome.refresh')}
-          </Button>
-        </div>
-        <div className="mt-4 space-y-3">
-          <SearchBar
-            onSearch={handleSearch}
-            placeholder={t('referidosHome.searchPlaceholder')}
-            className="sm:max-w-xl"
-          />
+          <div className="w-full lg:max-w-md">
+            <SearchBar
+              onSearch={handleSearch}
+              placeholder={t('referidosHome.searchPlaceholder')}
+              className="flex-nowrap"
+              stackOnMobile={false}
+            />
+          </div>
         </div>
       </section>
 
@@ -117,7 +109,7 @@ export const Home = () => {
       )}
 
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, idx) => (
             <div
               key={idx}

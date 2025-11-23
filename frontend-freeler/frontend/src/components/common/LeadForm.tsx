@@ -4,7 +4,7 @@ import { LeadService } from '@/services/lead.service';
 import type { Lead, LeadDraft } from '@/services/lead.service';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Textarea } from '@/components/ui/Textarea';
+import { TextArea } from '@/components/ui/TextArea';
 import { useAuth } from '@/store/auth';
 import { useToast } from '@/components/common/Toasts';
 import { isValidDni, isValidEmail } from '@/utils/validators';
@@ -333,7 +333,7 @@ export const LeadForm = ({ campaignId, lead = null, onSubmitted }: LeadFormProps
           onChange={handleChange('ocupacion')}
         />
       </div>
-      <Textarea
+      <TextArea
         label="Descripcion"
         minRows={3}
         required

@@ -94,6 +94,44 @@ export class FindLeadsDto extends PaginationDto {
   @IsOptional()
   @IsDateString()
   fecha_hasta?: string;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Filtrar solo leads sin asignacion activa',
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true' || normalized === '1') return true;
+      if (normalized === 'false' || normalized === '0') return false;
+    }
+    return value;
+  })
+  @IsBoolean()
+  solo_sin_asignar?: boolean;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Cuando es true solo devuelve leads referidos por freelers (default true)',
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true' || normalized === '1') return true;
+      if (normalized === 'false' || normalized === '0') return false;
+    }
+    return value;
+  })
+  @IsBoolean()
+  solo_referidos?: boolean;
 }
 
 export default FindLeadsDto;

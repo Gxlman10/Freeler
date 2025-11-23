@@ -11,6 +11,7 @@ type SearchBarProps = {
   onSearch: (term: string) => void;
   onClear?: () => void;
   className?: string;
+  stackOnMobile?: boolean;
 };
 
 export const SearchBar = ({
@@ -21,6 +22,7 @@ export const SearchBar = ({
   onSearch,
   onClear,
   className,
+  stackOnMobile = true,
 }: SearchBarProps) => {
   const [term, setTerm] = useState(defaultValue);
 
@@ -36,7 +38,11 @@ export const SearchBar = ({
 
   return (
     <form
-      className={cn('flex w-full flex-col gap-2 sm:flex-row sm:items-center', className)}
+      className={cn(
+        'flex w-full gap-2',
+        stackOnMobile ? 'flex-col sm:flex-row sm:items-center' : 'flex-row flex-wrap items-center',
+        className,
+      )}
       onSubmit={handleSubmit}
     >
       <Input

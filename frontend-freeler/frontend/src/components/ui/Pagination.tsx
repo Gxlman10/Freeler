@@ -33,9 +33,10 @@ export const Pagination = ({
     return pages;
   };
 
-  const NavButton = (
-    props: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean },
-  ) => (
+  const NavButton = ({
+    active = false,
+    ...props
+  }: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) => (
     <button
       type="button"
       {...props}
@@ -44,8 +45,9 @@ export const Pagination = ({
         props.disabled
           ? 'cursor-not-allowed opacity-40'
           : 'hover:bg-surface-muted',
-        props.active ? 'bg-primary-600 text-white hover:bg-primary-700' : 'text-content'
+        active ? 'bg-primary-600 text-white hover:bg-primary-700' : 'text-content'
       )}
+      data-active={active || undefined}
     />
   );
 

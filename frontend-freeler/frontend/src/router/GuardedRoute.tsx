@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/store/auth';
 import { APP_ROUTES, Role } from '@/utils/constants';
+import SinAcceso from '@/pages/crm/SinAcceso';
 
 type Props = {
   children: ReactNode;
@@ -21,7 +22,7 @@ export const GuardedRoute = ({ children, allow }: Props) => {
     return <Navigate to={APP_ROUTES.crm.login} replace />;
   }
   if (!user.role || !allow.includes(user.role)) {
-    return <Navigate to={APP_ROUTES.crm.sinAcceso} replace />;
+    return <SinAcceso requestedPath={location.pathname} />;
   }
   return <>{children}</>;
 };

@@ -17,6 +17,7 @@ import { ComisionesModule } from './comisiones/comisiones.module';
 import { AsignacionesModule } from './asignaciones/asignaciones.module';
 import { CampanasModule } from './campanas/campanas.module';
 import { DocumentosModule } from './documentos/documentos.module';
+import { IaConfigModule } from './ia-config/ia-config.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { DocumentosModule } from './documentos/documentos.module';
     AsignacionesModule,
     CampanasModule,
     DocumentosModule,
+    IaConfigModule,
   ],
 })
 export class AppModule {}

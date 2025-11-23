@@ -3,13 +3,21 @@ import { cn } from '@/utils/cn';
 
 type TableRootProps = {
   children: ReactNode;
+  // Optional wrapper classnames.
   className?: string;
+  // Controls the min-width utility so every table can decide how much horizontal space it needs.
+  minWidthClass?: string;
 };
 
-export const Table = ({ children, className }: TableRootProps) => (
-  // Contenedor con bordes consistentes y sin transparencias
-  <div className={cn('w-full overflow-x-auto rounded-lg border border-border-subtle bg-surface', className)}>
-    <table className="min-w-full divide-y divide-border-subtle text-sm">{children}</table>
+export const Table = ({ children, className, minWidthClass = 'min-w-[960px]' }: TableRootProps) => (
+  <div className={cn('w-full max-w-full overflow-x-auto', className)}>
+    <div className="inline-block min-w-full align-middle">
+      <div className="rounded-xl border border-border-subtle bg-surface shadow-card">
+        <table className={cn('w-full table-auto divide-y divide-border-subtle text-xs sm:text-sm', minWidthClass)}>
+          {children}
+        </table>
+      </div>
+    </div>
   </div>
 );
 
@@ -60,14 +68,17 @@ type CellProps = {
 export const TableHead = ({ children, className }: CellProps) => (
   <th
     scope="col"
-    className={cn('px-4 py-3 text-xs font-semibold text-content-muted first:pl-6 last:pr-6', className)}
+    className={cn(
+      'whitespace-nowrap px-4 py-3 text-xs font-semibold text-content-muted first:pl-6 last:pr-6',
+      className,
+    )}
   >
     {children}
   </th>
 );
 
 export const TableCell = ({ children, className }: CellProps) => (
-  <td className={cn('px-4 py-3 text-sm text-content first:pl-6 last:pr-6', className)}>
+  <td className={cn('whitespace-nowrap px-4 py-3 text-sm text-content first:pl-6 last:pr-6', className)}>
     {children}
   </td>
 );

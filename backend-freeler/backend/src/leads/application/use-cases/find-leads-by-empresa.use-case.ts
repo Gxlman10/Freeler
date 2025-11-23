@@ -15,6 +15,7 @@ import {
   USUARIO_EMPRESA_REPOSITORY,
 } from '../../../usuarios-empresa/application/interfaces/usuario-empresa.repository.interface';
 import { CampanaEntity } from '../../../campanas/infrastructure/entities/campana.entity';
+import { LeadEntity } from '../../infrastructure/entities/lead.entity';
 
 type CampaignSummary = {
   id_campania: number;
@@ -50,13 +51,51 @@ export class FindLeadsByEmpresaUseCase {
       throw new ForbiddenException('EMPRESA_CONTEXT_REQUIRED');
     }
 
+    const vendorTargetId =
+      typeof filters.asignado_a_usuario_empresa_id === 'number'
+        ? filters.asignado_a_usuario_empresa_id
+        : undefined;
+
+    if (vendorTargetId) {
+      const { data, total, page, limit } =
+        await this.leadRepo.paginateAssignedTo(vendorTargetId, {
+          ...filters,
+          solo_referidos: false,
+          estado_completo: filters.estado_completo,
+          id_empresa: actor.id_empresa ?? undefined,
+        });
+      return {
+        data,
+        total,
+        page,
+        limit,
+        campaigns: this.buildCampaignSummaryFromLeads(data),
+      };
+    }
+
+    const soloReferidos = filters.solo_referidos ?? true;
+
+    const joinCondition = soloReferidos
+      ? `lead.estado_completo = :estado AND (lead.id_usuario_freeler IS NOT NULL OR LOWER(COALESCE(lead.origen, '')) = :freelerOrigen)`
+      : '1=1';
+
+    const joinParams = soloReferidos
+      ? {
+          estado: true,
+          freelerOrigen: 'freeler',
+        }
+      : {};
+
     const campaignsQuery = this.campanaRepo
       .createQueryBuilder('c')
       .select(['c.id_campania AS id_campania', 'c.nombre AS nombre'])
       .addSelect('COUNT(lead.id_lead)', 'totalReferidos')
-      .leftJoin('c.leads', 'lead', 'lead.estado_completo = :estado', {
-        estado: true,
-      })
+      .leftJoin(
+        'c.leads',
+        'lead',
+        joinCondition,
+        joinParams,
+      )
       .where('c.id_empresa = :empresa', { empresa: actor.id_empresa })
       .groupBy('c.id_campania')
       .having('COUNT(lead.id_lead) > 0');
@@ -80,7 +119,7 @@ export class FindLeadsByEmpresaUseCase {
     }));
 
     const campaignIds = campaigns.map((campaign) => campaign.id_campania);
-    if (!campaignIds.length) {
+    if (soloReferidos && !campaignIds.length) {
       return {
         data: [],
         total: 0,
@@ -90,6 +129,9 @@ export class FindLeadsByEmpresaUseCase {
       };
     }
 
+    const selectedCampaignIds =
+      filters.id_campanias?.length ? filters.id_campanias : soloReferidos ? campaignIds : undefined;
+
     const {
       data,
       total,
@@ -98,8 +140,8 @@ export class FindLeadsByEmpresaUseCase {
     } = await this.leadRepo.paginate({
       ...filters,
       id_empresa: actor.id_empresa ?? undefined,
-      id_campanias: campaignIds,
-      estado_completo: true,
+      id_campanias: selectedCampaignIds,
+      estado_completo: soloReferidos ? true : filters.estado_completo,
     });
 
     return {
@@ -109,6 +151,24 @@ export class FindLeadsByEmpresaUseCase {
       limit: currentLimit,
       campaigns,
     };
+  }
+
+  private buildCampaignSummaryFromLeads(leads: LeadEntity[]): CampaignSummary[] {
+    const summaryMap = new Map<number, CampaignSummary>();
+    leads.forEach((lead) => {
+      const campaignId = lead.campania?.id_campania ?? lead.id_campania;
+      if (!campaignId) return;
+      if (!summaryMap.has(campaignId)) {
+        summaryMap.set(campaignId, {
+          id_campania: campaignId,
+          nombre: lead.campania?.nombre ?? 'Campana',
+          totalReferidos: 0,
+        });
+      }
+      const current = summaryMap.get(campaignId);
+      if (current) current.totalReferidos += 1;
+    });
+    return Array.from(summaryMap.values());
   }
 }
 

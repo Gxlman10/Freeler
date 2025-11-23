@@ -70,32 +70,39 @@ export type RucLookupResult = {
 @Injectable()
 export class DocumentosService {
   private readonly logger = new Logger(DocumentosService.name);
-  private readonly baseUrl: string;
-  private readonly fallbackUrl: string;
+  private readonly apiPeruUrl: string;
+  private readonly graphUrl: string;
   private readonly token: string;
-  private readonly enableFallback: boolean;
+  private readonly enableApiFallback: boolean;
   private readonly timeout: number;
 
   constructor(private readonly config: ConfigService) {
-    this.baseUrl = this.config.get<string>('apiperu.baseUrl')!;
-    this.fallbackUrl = this.config.get<string>('apiperu.fallbackUrl')!;
+    this.apiPeruUrl =
+      this.config.get<string>('apiperu.apiPeruUrl') ??
+      this.config.get<string>('apiperu.baseUrl')!;
+    this.graphUrl =
+      this.config.get<string>('apiperu.graphPeruUrl') ??
+      this.config.get<string>('apiperu.fallbackUrl')!;
     this.token = this.config.get<string>('apiperu.token') ?? '';
-    this.enableFallback = this.config.get<boolean>('apiperu.enableFallback') ?? true;
+    this.enableApiFallback =
+      this.config.get<boolean>('apiperu.enableApiPeruFallback') ??
+      this.config.get<boolean>('apiperu.enableFallback') ??
+      true;
     this.timeout = this.config.get<number>('apiperu.timeout') ?? 5000;
   }
 
   async consultarDni(dni: string): Promise<DniLookupResult | null> {
-    const primary = await this.consultarDniApiPeru(dni);
+    const primary = await this.consultarDniGraphPeru(dni);
     if (primary) return primary;
-    if (!this.enableFallback) return null;
-    return this.consultarDniFallback(dni);
+    if (!this.enableApiFallback) return null;
+    return this.consultarDniApiPeru(dni);
   }
 
   async consultarRuc(ruc: string): Promise<RucLookupResult | null> {
-    const primary = await this.consultarRucApiPeru(ruc);
+    const primary = await this.consultarRucGraphPeru(ruc);
     if (primary) return primary;
-    if (!this.enableFallback) return null;
-    return this.consultarRucFallback(ruc);
+    if (!this.enableApiFallback) return null;
+    return this.consultarRucApiPeru(ruc);
   }
 
   private capitalize(value?: string | null): string | null {
@@ -110,11 +117,11 @@ export class DocumentosService {
 
   private async consultarDniApiPeru(dni: string): Promise<DniLookupResult | null> {
     if (!this.token) {
-      this.logger.warn('APISPERU token no configurado; omitiendo consulta principal para DNI');
+      this.logger.warn('APISPERU token no configurado; omitiendo uso de ApiPeru para DNI');
       return null;
     }
 
-    const url = `${this.baseUrl}/dni/${dni}?token=${this.token}`;
+    const url = `${this.apiPeruUrl}/dni/${dni}?token=${this.token}`;
     try {
       const data = await this.fetchJson<ApiPeruDniResponse>(url);
       if (!data || (!data.success && data.success !== undefined)) return null;
@@ -136,11 +143,11 @@ export class DocumentosService {
 
   private async consultarRucApiPeru(ruc: string): Promise<RucLookupResult | null> {
     if (!this.token) {
-      this.logger.warn('APISPERU token no configurado; omitiendo consulta principal para RUC');
+      this.logger.warn('APISPERU token no configurado; omitiendo uso de ApiPeru para RUC');
       return null;
     }
 
-    const url = `${this.baseUrl}/ruc/${ruc}?token=${this.token}`;
+    const url = `${this.apiPeruUrl}/ruc/${ruc}?token=${this.token}`;
     try {
       const data = await this.fetchJson<ApiPeruRucResponse>(url);
       if (!data?.ruc) return null;
@@ -166,9 +173,9 @@ export class DocumentosService {
     }
   }
 
-  private async consultarDniFallback(dni: string): Promise<DniLookupResult | null> {
+  private async consultarDniGraphPeru(dni: string): Promise<DniLookupResult | null> {
     try {
-      const data = await this.fetchJson<GraphPeruResponse>(`${this.fallbackUrl}/${dni}`);
+      const data = await this.fetchJson<GraphPeruResponse>(`${this.graphUrl}/${dni}`);
       if (!data || data.error) return null;
       const surname =
         data.surnames?.split(' ') ??
@@ -185,14 +192,14 @@ export class DocumentosService {
         verificador: null,
       };
     } catch (error) {
-      this.logger.error(`Error consultando fallback DNI: ${(error as Error).message}`);
+      this.logger.error(`Error consultando DNI en GraphPeru: ${(error as Error).message}`);
       return null;
     }
   }
 
-  private async consultarRucFallback(ruc: string): Promise<RucLookupResult | null> {
+  private async consultarRucGraphPeru(ruc: string): Promise<RucLookupResult | null> {
     try {
-      const data = await this.fetchJson<GraphPeruResponse>(`${this.fallbackUrl}/${ruc}`);
+      const data = await this.fetchJson<GraphPeruResponse>(`${this.graphUrl}/${ruc}`);
       if (!data || data.error) return null;
       return {
         ruc: data.documentID ?? ruc,
@@ -209,7 +216,7 @@ export class DocumentosService {
         capital: null,
       };
     } catch (error) {
-      this.logger.error(`Error consultando fallback RUC: ${(error as Error).message}`);
+      this.logger.error(`Error consultando RUC en GraphPeru: ${(error as Error).message}`);
       return null;
     }
   }

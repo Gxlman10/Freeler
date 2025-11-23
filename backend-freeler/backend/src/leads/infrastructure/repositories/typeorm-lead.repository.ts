@@ -70,6 +70,7 @@ export class TypeormLeadRepository implements ILeadRepository {
       asignado_a_usuario_empresa_id,
       id_empresa,
       id_campanias,
+      solo_sin_asignar,
     } = filters;
     const qb = this.repo.createQueryBuilder('l');
 
@@ -112,6 +113,14 @@ export class TypeormLeadRepository implements ILeadRepository {
       );
     if (id_empresa)
       qb.andWhere('campania.id_empresa = :id_empresa', { id_empresa });
+    if (solo_sin_asignar) {
+      qb.andWhere(
+        `NOT EXISTS (
+          SELECT 1 FROM freeler.asignaciones asign_sin
+          WHERE asign_sin.id_lead = l.id_lead AND asign_sin.estado = 1
+        )`,
+      );
+    }
 
     const [data, total] = await qb
       .orderBy('l.fecha_creacion', 'DESC')
@@ -139,10 +148,10 @@ export class TypeormLeadRepository implements ILeadRepository {
     const qb = this.repo.createQueryBuilder('l');
     qb.leftJoinAndSelect('l.campania', 'campania');
     qb.leftJoinAndSelect('l.estado', 'estado');
-    qb.innerJoin(
-      'freeler.asignaciones',
+    qb.innerJoinAndSelect(
+      'l.asignaciones',
       'assign',
-      'assign.id_lead = l.id_lead AND assign.estado = 1 AND assign.id_asignado_usuario_empresa = :tenantId',
+      'assign.estado = 1 AND assign.id_asignado_usuario_empresa = :tenantId',
       { tenantId },
     );
     qb.leftJoinAndSelect('assign.asignado', 'asignado');

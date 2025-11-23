@@ -17,10 +17,15 @@ import LeadsSupervisor from '@/pages/crm/LeadsSuperadmin';
 import LeadsAdmin from '@/pages/crm/LeadsAdmin';
 import HomeVendedor from '@/pages/crm/HomeVendedor';
 import LeadsVendedor from '@/pages/crm/LeadsVendedor';
+import LeadsKanban from '@/pages/crm/LeadsKanban';
 import HomeAnalitica from '@/pages/crm/HomeAnalitica';
+import ComisionesAdmin from '@/pages/crm/ComisionesAdmin';
 import SinAcceso from '@/pages/crm/SinAcceso';
 import Proximamente from '@/pages/crm/Proximamente';
+import ConfigIA from '@/pages/crm/ConfigIA';
 import { GuardedRoute } from './GuardedRoute';
+import { ReferidosGuardedRoute } from './ReferidosGuardedRoute';
+import NotFound from '@/pages/common/NotFound';
 import { APP_ROUTES, Role } from '@/utils/constants';
 import { useAuth } from '@/store/auth';
 
@@ -50,9 +55,30 @@ export const AppRouter = () => (
         <Route path={APP_ROUTES.referidos.home} element={<HomeReferidos />} />
         <Route path={APP_ROUTES.referidos.login} element={<LoginReferidos />} />
         <Route path={APP_ROUTES.referidos.register} element={<RegisterReferidos />} />
-        <Route path={APP_ROUTES.referidos.misReferidos} element={<MisReferidos />} />
-        <Route path={APP_ROUTES.referidos.dashboard} element={<DashboardReferidos />} />
-        <Route path={APP_ROUTES.referidos.capacitacion} element={<Capacitacion />} />
+        <Route
+          path={APP_ROUTES.referidos.misReferidos}
+          element={
+            <ReferidosGuardedRoute>
+              <MisReferidos />
+            </ReferidosGuardedRoute>
+          }
+        />
+        <Route
+          path={APP_ROUTES.referidos.dashboard}
+          element={
+            <ReferidosGuardedRoute>
+              <DashboardReferidos />
+            </ReferidosGuardedRoute>
+          }
+        />
+        <Route
+          path={APP_ROUTES.referidos.capacitacion}
+          element={
+            <ReferidosGuardedRoute>
+              <Capacitacion />
+            </ReferidosGuardedRoute>
+          }
+        />
       </Route>
 
       <Route path={APP_ROUTES.crm.login} element={<LoginCrm />} />
@@ -92,10 +118,34 @@ export const AppRouter = () => (
           }
         />
         <Route
+          path={APP_ROUTES.crm.leadsKanban}
+          element={
+            <GuardedRoute allow={[Role.ADMIN, Role.SUPERVISOR]}>
+              <LeadsKanban variant="admin" />
+            </GuardedRoute>
+          }
+        />
+        <Route
           path={APP_ROUTES.crm.usuarios}
           element={
             <GuardedRoute allow={[Role.ADMIN, Role.SUPERVISOR]}>
               <Usuarios />
+            </GuardedRoute>
+          }
+        />
+        <Route
+          path={APP_ROUTES.crm.comisiones}
+          element={
+            <GuardedRoute allow={[Role.ADMIN, Role.SUPERVISOR]}>
+              <ComisionesAdmin />
+            </GuardedRoute>
+          }
+        />
+        <Route
+          path={APP_ROUTES.crm.iaConfig}
+          element={
+            <GuardedRoute allow={[Role.ADMIN]}>
+              <ConfigIA />
             </GuardedRoute>
           }
         />
@@ -132,6 +182,14 @@ export const AppRouter = () => (
           }
         />
         <Route
+          path={APP_ROUTES.crm.vendedor.kanban}
+          element={
+            <GuardedRoute allow={[Role.VENDEDOR]}>
+              <LeadsKanban variant="vendor" />
+            </GuardedRoute>
+          }
+        />
+        <Route
           path={APP_ROUTES.crm.analitica}
           element={
             <GuardedRoute allow={[Role.ANALISTA, Role.ADMIN, Role.SUPERVISOR]}>
@@ -143,7 +201,7 @@ export const AppRouter = () => (
         <Route path={APP_ROUTES.crm.proximamente} element={<Proximamente />} />
       </Route>
 
-      <Route path="*" element={<Navigate to={APP_ROUTES.referidos.home} replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   </BrowserRouter>
 );
