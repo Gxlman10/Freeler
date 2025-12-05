@@ -3,12 +3,14 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { LeadEntity } from '../../../leads/infrastructure/entities/lead.entity';
 import { CampanaEntity } from '../../../campanas/infrastructure/entities/campana.entity';
 import { UsuarioFreelerEntity } from '../../../usuarios-freeler/infrastructure/entities/usuario-freeler.entity';
 import { EstadoComisionEntity } from './estado-comision.entity';
+import { ComisionSolicitudEntity } from './comision-solicitud.entity';
 
 @Entity({ schema: 'freeler', name: 'comisiones' })
 export class ComisionEntity {
@@ -29,6 +31,9 @@ export class ComisionEntity {
 
   @Column({ type: 'int', name: 'id_estado_comision', nullable: true })
   id_estado_comision?: number | null;
+
+  @Column({ type: 'int', name: 'id_solicitud', nullable: true })
+  id_solicitud?: number | null;
 
   @Column({ type: 'timestamp', name: 'fecha_pago', nullable: true })
   fecha_pago?: Date | null;
@@ -54,6 +59,11 @@ export class ComisionEntity {
     referencedColumnName: 'id_estado_comision',
   })
   estado?: EstadoComisionEntity | null;
+
+  @OneToMany(() => ComisionSolicitudEntity, (solicitud) => solicitud.comision, {
+    cascade: false,
+  })
+  solicitudes?: ComisionSolicitudEntity[];
 }
 
 export default ComisionEntity;

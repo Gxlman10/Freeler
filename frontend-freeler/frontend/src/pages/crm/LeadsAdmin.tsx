@@ -36,6 +36,10 @@ import { LeadDetailDrawer } from '@/components/common/LeadDetailDrawer';
 import { Accordion } from '@/components/common/Accordion';
 import { Pagination } from '@/components/ui/Pagination';
 import { t } from '@/i18n';
+import { useIsMobile } from '@/hooks/useMediaQuery';
+import { MobileFiltersModal } from '@/components/common/MobileFiltersModal';
+import { FilterPanel, FilterField } from '@/components/common/FilterPanel';
+import { FilterToggleButton } from '@/components/common/FilterToggleButton';
 
 type FiltersState = {
   search: string;
@@ -64,6 +68,15 @@ const FALLBACK_STATUSES: BulkStatusOption[] = [
   { id: 4, label: 'En gestion' },
   { id: 5, label: 'Perdido' },
   { id: 6, label: 'Ganado' },
+  { id: 7, label: 'Volver a llamar' },
+  { id: 8, label: 'Cita pendiente' },
+  { id: 9, label: 'Cita concretada' },
+  { id: 10, label: 'No contesta' },
+  { id: 11, label: 'Seguimiento' },
+  { id: 12, label: 'Otro producto' },
+  { id: 13, label: 'No desea' },
+  { id: 14, label: 'No califica' },
+  { id: 15, label: 'Otros (no catalogados)' },
 ];
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
@@ -98,7 +111,7 @@ type TimelineItem = {
   message: string;
 };
 
-type LeadsAdminVariant = 'admin' | 'vendor';
+type LeadsAdminVariant = 'admin' | 'supervisor' | 'vendor';
 
 type LeadsAdminProps = {
   variant?: LeadsAdminVariant;
@@ -497,7 +510,7 @@ const ImportReportPanel = ({
 };
 
 export const LeadsAdmin = ({
-  variant = 'admin',
+  variant,
   showOriginFilter = true,
   showOriginColumn = true,
   title,
@@ -506,13 +519,34 @@ export const LeadsAdmin = ({
   const { push } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const resolvedVariant =
+    variant ??
+    (user?.role === Role.VENDEDOR ? 'vendor' : user?.role === Role.SUPERVISOR ? 'supervisor' : 'admin');
   const [searchParams, setSearchParams] = useSearchParams();
-  const isVendorMode = variant === 'vendor';
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+  const isVendorMode = resolvedVariant === 'vendor';
+  const isSupervisorMode = resolvedVariant === 'supervisor';
+  const originFilterVisible = showOriginFilter && !isSupervisorMode;
+  const originColumnVisible = showOriginColumn && !isSupervisorMode;
   const parsedUserId = Number(user?.id ?? NaN);
   const currentUserId = Number.isFinite(parsedUserId) ? parsedUserId : null;
   const pendingStatusLabel = 'pendiente';
   const assignedStatusLabel = 'asignado';
   const canEditLead = isVendorMode || user?.role === Role.ADMIN || user?.role === Role.SUPERVISOR;
+  const translate = useCallback(
+    (key: string, fallback: string) => {
+      const value = t(key);
+      return value === key ? fallback : value;
+    },
+    [],
+  );
+  const searchLabel = translate('crmLeads.search.label', 'Buscar');
+  const searchPlaceholder = translate('crmLeads.search.placeholder', 'Nombre, telefono, DNI o correo');
+  const filtersLabel = translate('crmLeads.actions.filters', 'Filtros');
+  const bulkPendingWarning = translate(
+    'crmLeads.bulk.pendingWarning',
+    'Los leads pendientes no permiten cambiar el estado manualmente. Asigna un vendedor primero.',
+  );
 
   const invalidateLeadQueries = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['crm-admin-leads'] });
@@ -525,6 +559,8 @@ export const LeadsAdmin = ({
     if (typeof window === 'undefined') return true;
     return window.matchMedia('(min-width: 768px)').matches;
   });
+  const isMobile = useIsMobile();
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState(DEFAULT_FILTERS.search);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [selectedAction, setSelectedAction] = useState<LeadBulkAction>(null);
@@ -543,6 +579,11 @@ export const LeadsAdmin = ({
   const [importReport, setImportReport] = useState<LeadImportJob | null>(null);
   const [isImportReportOpen, setImportReportOpen] = useState(false);
   const [isImportReportLoading, setImportReportLoading] = useState(false);
+  useEffect(() => {
+    if (isMobile) {
+      setFiltersExpanded(false);
+    }
+  }, [isMobile]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'creado', direction: 'desc' });
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
@@ -1015,6 +1056,88 @@ export const LeadsAdmin = ({
     }
     return options;
   }, [isVendorMode, leadsQuery.data, leads]);
+  const filtersForm = (
+    <FilterPanel>
+      {originFilterVisible && (
+        <FilterField>
+          <Select
+            label={t('crmLeads.filters.origin.label')}
+            value={filters.origin}
+            onChange={(event) => setFilters((prev) => ({ ...prev, origin: event.target.value }))}
+            options={[{ label: t('crmLeads.filters.origin.all'), value: 'all' }, ...originFilterOptions]}
+            className="w-full"
+          />
+        </FilterField>
+      )}
+      <FilterField>
+        <Select
+          label={t('crmLeads.filters.campaign.label')}
+          value={filters.campaignId}
+          onChange={(event) => setFilters((prev) => ({ ...prev, campaignId: event.target.value }))}
+          options={campaignFilterOptions}
+          className="w-full"
+        />
+      </FilterField>
+      <FilterField>
+        <Select
+          label={t('crmLeads.filters.status.label')}
+          value={filters.statusId === 'all' ? 'all' : String(filters.statusId)}
+          onChange={(event) =>
+            setFilters((prev) => ({
+              ...prev,
+              statusId: event.target.value === 'all' ? 'all' : Number(event.target.value),
+            }))
+          }
+          options={[
+            { label: t('crmLeads.filters.status.all'), value: 'all' },
+            ...statusOptions.map((status) => ({ value: status.id, label: status.label })),
+          ]}
+          className="w-full"
+        />
+      </FilterField>
+      {!isVendorMode && (
+        <FilterField>
+          <Select
+            label={t('crmLeads.filters.vendor.label')}
+            value={filters.vendorId}
+            onChange={(event) => setFilters((prev) => ({ ...prev, vendorId: event.target.value }))}
+            options={[{ label: t('crmLeads.filters.vendor.all'), value: 'all' }, ...vendorFilterOptions]}
+            className="w-full"
+          />
+        </FilterField>
+      )}
+      <FilterField>
+        <Select
+          label={t('crmLeads.filters.city.label')}
+          value={filters.city}
+          onChange={(event) => setFilters((prev) => ({ ...prev, city: event.target.value }))}
+          options={[{ label: t('crmLeads.filters.city.all'), value: 'all' }, ...cityFilterOptions]}
+          className="w-full"
+        />
+      </FilterField>
+      {!isVendorMode && (
+        <FilterField className="w-full max-w-xs">
+          <div className="flex flex-col gap-2 rounded-xl border border-border-subtle bg-surface px-4 py-3">
+            <span className="text-xs font-semibold uppercase tracking-wide text-content-muted">
+              {translate('crmLeads.filters.unassignedShortLabel', 'Pendientes de asignar')}
+            </span>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm font-medium text-content">
+                {translate('crmLeads.filters.unassignedToggle', 'Solo pendientes')}
+              </span>
+              <Switch
+                checked={filters.onlyUnassigned}
+                onChange={(event) =>
+                  setFilters((prev) => ({ ...prev, onlyUnassigned: event.target.checked }))
+                }
+                aria-label={translate('crmLeads.filters.unassignedToggle', 'Solo pendientes')}
+              />
+            </div>
+          </div>
+        </FilterField>
+      )}
+    </FilterPanel>
+  );
   const pageSizeOptions = useMemo(
     () => PAGE_SIZE_OPTIONS.map((value) => ({ value: String(value), label: `${value} por pagina` })),
     [],
@@ -1118,6 +1241,11 @@ export const LeadsAdmin = ({
 
   const allSelected =
     visibleLeads.length > 0 && visibleLeads.every((lead) => selectedIds.includes(lead.id_lead));
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = selectedIds.length > 0 && !allSelected;
+    }
+  }, [allSelected, selectedIds]);
 
   const contactBaseline = useMemo(() => buildContactSnapshot(editingLead), [editingLead]);
   const contactChanged = useMemo(
@@ -1127,11 +1255,48 @@ export const LeadsAdmin = ({
       ),
     [contactBaseline, contactForm],
   );
+  const canEditContactValue = useCallback(
+    (value: string) => !isVendorMode || !(value ?? '').trim().length,
+    [isVendorMode],
+  );
   const currentAssignment = editingLead ? getActiveAssignmentEntity(editingLead) : null;
+  const hasVendorAssigned = Boolean(currentAssignment);
   const vendorBaseline = currentAssignment ? String(currentAssignment.id_asignado_usuario_empresa) : '';
   const statusBaseline = editingLead?.estado?.id_estado_lead ? String(editingLead.estado.id_estado_lead) : '';
   const vendorChanged = operationState.vendorId !== vendorBaseline;
   const statusChanged = operationState.statusId !== statusBaseline;
+  const editingLeadStatusSlug = editingLead ? normalizeStatusValue(editingLead.estado?.nombre) : '';
+  const editingLeadIsPending = editingLeadStatusSlug === pendingStatusLabel;
+  const finalStateSet = useMemo(() => new Set(['ganado', 'perdido']), []);
+  const isFinalState = finalStateSet.has(editingLeadStatusSlug);
+  const canChangeVendor = !isVendorMode && !isFinalState;
+  const canChangeStatus = hasVendorAssigned && !editingLeadIsPending;
+  const isAssignedToCurrentUser =
+    Boolean(currentAssignment?.id_asignado_usuario_empresa) &&
+    currentAssignment?.id_asignado_usuario_empresa === currentUserId;
+  const canSelfAssign = Boolean(
+    isVendorMode && currentUserId && (!currentAssignment || isAssignedToCurrentUser),
+  );
+  const statusBlockedMessage = !hasVendorAssigned
+    ? translate('crmLeads.drawer.statusBlocked.noVendor', 'Asigna un vendedor antes de cambiar el estado.')
+    : editingLeadIsPending
+    ? translate(
+        'crmLeads.drawer.statusBlocked.pending',
+        'Los leads pendientes cambian a Asignado automáticamente al asignarlos.',
+      )
+    : null;
+  const selectedVisibleLeads = useMemo(
+    () => visibleLeads.filter((lead) => selectedIds.includes(lead.id_lead)),
+    [selectedIds, visibleLeads],
+  );
+  const selectedPendingLeadIds = useMemo(
+    () =>
+      selectedVisibleLeads
+        .filter((lead) => normalizeStatusValue(lead.estado?.nombre) === pendingStatusLabel)
+        .map((lead) => lead.id_lead),
+    [pendingStatusLabel, selectedVisibleLeads],
+  );
+  const hasPendingLeadSelected = selectedPendingLeadIds.length > 0;
   const historyEntries = historyQuery.data?.entries ?? [];
   const fallbackTimeline = useMemo(() => buildLeadTimelineFromAssignments(editingLead), [editingLead]);
   const timelineItems = useMemo<TimelineItem[]>(() => {
@@ -1214,7 +1379,29 @@ export const LeadsAdmin = ({
   };
 
   const bulkMutation = useMutation({
-    mutationFn: LeadService.bulkUpdate,
+    mutationFn: async ({
+      payload,
+      pendingLeadIds,
+    }: {
+      payload: Parameters<typeof LeadService.bulkUpdate>[0];
+      pendingLeadIds: number[];
+    }) => {
+      await LeadService.bulkUpdate(payload);
+      if (payload.action === 'assign' && pendingLeadIds.length) {
+        const assignedStatusId = getStatusIdByLabel(assignedStatusLabel);
+        if (assignedStatusId && payload.usuarioEmpresaId) {
+          await Promise.all(
+            pendingLeadIds.map((leadId) =>
+              LeadService.updateStatus({
+                leadId,
+                id_estado_lead: assignedStatusId,
+                usuarioEmpresaId: payload.usuarioEmpresaId,
+              }),
+            ),
+          );
+        }
+      }
+    },
     onSuccess: () => {
       push({ title: 'Accion aplicada', description: 'Los leads se actualizaron correctamente.' });
       resetBulkState();
@@ -1240,6 +1427,14 @@ export const LeadsAdmin = ({
   };
 
   const handleBulkConfirm = () => {
+    if (selectedAction === 'change-status' && hasPendingLeadSelected) {
+      push({
+        title: 'No disponible para pendientes',
+        description: 'Asigna los leads pendientes antes de cambiar su estado manualmente.',
+        variant: 'warning',
+      });
+      return;
+    }
     if (!selectedAction || !user) {
       if (!selectedAction) return;
       push({
@@ -1256,7 +1451,10 @@ export const LeadsAdmin = ({
     };
     if (selectedAction === 'assign') payload.vendedorId = selectedVendorId ?? undefined;
     if (selectedAction === 'change-status') payload.estadoId = selectedStatusId ?? undefined;
-    bulkMutation.mutate(payload);
+    bulkMutation.mutate({
+      payload,
+      pendingLeadIds: selectedPendingLeadIds,
+    });
   };
 
   const refreshEditingLead = useCallback(async (leadId: number) => {
@@ -1273,7 +1471,7 @@ export const LeadsAdmin = ({
       LeadService.update(leadId, data),
     onSuccess: async (_response, variables) => {
       push({ title: 'Lead actualizado', description: 'Los datos de contacto se guardaron.' });
-      await refreshEditingLead(variables.leadId);
+      refreshEditingLead(variables.leadId);
       invalidateLeadQueries();
     },
     onError: () => {
@@ -1300,9 +1498,9 @@ export const LeadsAdmin = ({
         id_estado_lead: statusId,
         usuarioEmpresaId,
       }),
-    onSuccess: async (_response, variables) => {
+    onSuccess: (_response, variables) => {
       push({ title: 'Estado actualizado', description: 'El lead cambió de estado.' });
-      await refreshEditingLead(variables.leadId);
+      refreshEditingLead(variables.leadId);
       invalidateLeadQueries();
     },
     onError: () => {
@@ -1490,6 +1688,16 @@ export const LeadsAdmin = ({
 
   const handleStatusSave = () => {
     if (!editingLead) return;
+    if (!canChangeStatus) {
+      push({
+        title: 'No disponible',
+        description: hasVendorAssigned
+          ? 'Asigna el lead antes de cambiar su estado.'
+          : 'Debes asignar un vendedor antes de actualizar el estado.',
+        variant: 'warning',
+      });
+      return;
+    }
     if (!operationState.statusId) {
       push({
         title: 'Selecciona un estado',
@@ -1534,6 +1742,23 @@ export const LeadsAdmin = ({
     assignVendorMutation.mutate({
       leadId: editingLead.id_lead,
       vendedorId: Number(operationState.vendorId),
+      usuarioEmpresaId: Number(user.id),
+    });
+  };
+
+  const handleSelfAssign = () => {
+    if (!editingLead || !currentUserId || !user?.id) return;
+    if (currentAssignment && currentAssignment.id_asignado_usuario_empresa && currentAssignment.id_asignado_usuario_empresa !== currentUserId) {
+      push({
+        title: 'No disponible',
+        description: 'El lead ya cuenta con un vendedor asignado.',
+        variant: 'warning',
+      });
+      return;
+    }
+    assignVendorMutation.mutate({
+      leadId: editingLead.id_lead,
+      vendedorId: currentUserId,
       usuarioEmpresaId: Number(user.id),
     });
   };
@@ -1600,7 +1825,7 @@ export const LeadsAdmin = ({
                   </Button>
                   <Button
                     type="button"
-                    className="border-transparent bg-[#22c55e] text-white shadow-card hover:bg-[#1ca34c]"
+                    className="border-transparent bg-[#107C41] text-white shadow-card hover:bg-[#0d6434]"
                     onClick={() => setImportDialogOpen(true)}
                   >
                     Importar desde Excel
@@ -1612,8 +1837,8 @@ export const LeadsAdmin = ({
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div className="w-full md:max-w-md">
               <Input
-                label="Buscar"
-                placeholder="Nombre, tel?fono, DNI o correo"
+                label={searchLabel}
+                placeholder={searchPlaceholder}
                 value={filters.search}
                 onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
                 autoComplete="off"
@@ -1621,22 +1846,18 @@ export const LeadsAdmin = ({
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setFiltersExpanded((prev) => !prev)}
-                className="w-full sm:w-auto"
-              >
-                {filtersExpanded ? 'Ocultar filtros' : 'Mostrar filtros'}
-              </Button>
-              <Button
-                type="button"
-                variant={filters.onlyUnassigned ? 'primary' : 'ghost'}
-                onClick={() => setFilters((prev) => ({ ...prev, onlyUnassigned: !prev.onlyUnassigned }))}
-                className="h-10 w-full px-4 sm:w-auto"
-              >
-                {filters.onlyUnassigned ? 'Mostrando sin asignar' : 'Solo sin asignar'}
-              </Button>
+              <FilterToggleButton
+                label={filtersLabel}
+                expanded={filtersExpanded}
+                isMobile={isMobile}
+                onToggle={() => {
+                  if (isMobile) {
+                    setIsMobileFiltersOpen(true);
+                  } else {
+                    setFiltersExpanded((prev) => !prev);
+                  }
+                }}
+              />
             </div>
           </div>
         </header>
@@ -1650,57 +1871,18 @@ export const LeadsAdmin = ({
         />
               ) : null}
 
-        {filtersExpanded ? (
-        <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {showOriginFilter && (
-            <Select
-              label={t('crmLeads.filters.origin.label')}
-              value={filters.origin}
-              onChange={(event) => setFilters((prev) => ({ ...prev, origin: event.target.value }))}
-              options={[{ label: t('crmLeads.filters.origin.all'), value: 'all' }, ...originFilterOptions]}
-              className="w-full"
-            />
-          )}
-          <Select
-            label={t('crmLeads.filters.campaign.label')}
-            value={filters.campaignId}
-            onChange={(event) => setFilters((prev) => ({ ...prev, campaignId: event.target.value }))}
-            options={[{ label: t('crmLeads.filters.campaign.all'), value: 'all' }, ...campaignFilterOptions]}
-            className="w-full"
-          />
-          <Select
-            label={t('crmLeads.filters.status.label')}
-            value={filters.statusId === 'all' ? 'all' : String(filters.statusId)}
-            onChange={(event) =>
-              setFilters((prev) => ({
-                ...prev,
-                statusId: event.target.value === 'all' ? 'all' : Number(event.target.value),
-              }))
-            }
-            options={[
-              { label: t('crmLeads.filters.status.all'), value: 'all' },
-              ...statusOptions.map((status) => ({ value: status.id, label: status.label })),
-            ]}
-            className="w-full"
-          />
-          {!isVendorMode && (
-            <Select
-              label={t('crmLeads.filters.vendor.label')}
-              value={filters.vendorId}
-              onChange={(event) => setFilters((prev) => ({ ...prev, vendorId: event.target.value }))}
-              options={[{ label: t('crmLeads.filters.vendor.all'), value: 'all' }, ...vendorFilterOptions]}
-              className="w-full"
-            />
-          )}
-          <Select
-            label={t('crmLeads.filters.city.label')}
-            value={filters.city}
-            onChange={(event) => setFilters((prev) => ({ ...prev, city: event.target.value }))}
-            options={[{ label: t('crmLeads.filters.city.all'), value: 'all' }, ...cityFilterOptions]}
-            className="w-full"
-          />
-        </div>
-              ) : null}
+        {!isMobile && filtersExpanded ? filtersForm : null}
+        {isMobile && (
+          <MobileFiltersModal
+            open={isMobileFiltersOpen}
+            onOpenChange={setIsMobileFiltersOpen}
+            onApply={() => {
+              resetToFirstPage();
+            }}
+          >
+            {filtersForm}
+          </MobileFiltersModal>
+        )}
 
       {leadsQuery.isLoading ? (
         <p className="text-sm text-content-muted">Cargando leads...</p>
@@ -1710,10 +1892,16 @@ export const LeadsAdmin = ({
             <TableRow>
               <TableHead className="w-10">
                 <input
+                  ref={headerCheckboxRef}
                   type="checkbox"
-                  className="h-4 w-4 rounded border-border-subtle"
+                  className="h-5 w-5 rounded border-2 border-border-subtle text-primary-600 focus:ring-primary-500"
                   checked={allSelected}
                   onChange={toggleSelectAll}
+                  aria-checked={
+                    selectedIds.length
+                      ? (allSelected ? 'true' : 'mixed')
+                      : 'false'
+                  }
                   aria-label="Seleccionar todos los leads filtrados"
                 />
               </TableHead>
@@ -1721,9 +1909,9 @@ export const LeadsAdmin = ({
               {renderSortableHead('Campaña', 'campania')}
               {renderSortableHead('Estado', 'estado')}
               {renderSortableHead('Asignado a', 'asignado')}
-              {showOriginColumn && renderSortableHead('Origen', 'origen')}
+              {originColumnVisible && renderSortableHead('Origen', 'origen')}
               {renderSortableHead('Creado', 'creado')}
-              {renderSortableHead('Tiempo sin asignar', 'unassigned')}
+              {!isVendorMode && renderSortableHead('Tiempo sin asignar', 'unassigned')}
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -1745,7 +1933,7 @@ export const LeadsAdmin = ({
                   <TableCell className="w-10">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-border-subtle"
+                      className="h-5 w-5 rounded border-2 border-border-subtle text-primary-600 focus:ring-primary-500"
                       checked={isSelected}
                       onChange={() => toggleLeadSelection(lead.id_lead)}
                       aria-label={`Seleccionar lead ${fullName}`}
@@ -1783,9 +1971,11 @@ export const LeadsAdmin = ({
                       <span className="text-xs text-content-muted">Sin asignar</span>
                     )}
                   </TableCell>
-                  {showOriginColumn && <TableCell>{lead.origen ?? 'No indicado'}</TableCell>}
+                  {originColumnVisible && <TableCell>{lead.origen ?? 'No indicado'}</TableCell>}
                   <TableCell>{formatDate(lead.fecha_creacion)}</TableCell>
-                  <TableCell className="text-sm text-content-muted">{unassignedDuration}</TableCell>
+                  {!isVendorMode && (
+                    <TableCell className="text-sm text-content-muted">{unassignedDuration}</TableCell>
+                  )}
                   <TableCell className="text-right">
                     {canEditLead ? (
                       <Button size="sm" variant="outline" onClick={() => openEditLeadDialog(lead)}>
@@ -1839,7 +2029,13 @@ export const LeadsAdmin = ({
         onClear={resetBulkState}
         onConfirm={handleBulkConfirm}
         disabled={bulkMutation.isPending}
+        disableChangeStatus={hasPendingLeadSelected}
       />
+      {selectedAction === 'change-status' && hasPendingLeadSelected ? (
+        <p className="mt-2 text-center text-xs font-medium text-warning-600 dark:text-warning-300">
+          {bulkPendingWarning}
+        </p>
+      ) : null}
         </section>
         {isEditDialogOpen && editingLead ? (
           <div className="hidden">
@@ -1886,37 +2082,44 @@ export const LeadsAdmin = ({
                       label="DNI"
                       value={contactForm.dni}
                       onChange={(event) => handleContactInputChange('dni', event.target.value)}
+                      disabled={!canEditContactValue(contactForm.dni)}
                     />
                     <Input
                       label="Nombres"
                       value={contactForm.nombres}
                       onChange={(event) => handleContactInputChange('nombres', event.target.value)}
+                      disabled={!canEditContactValue(contactForm.nombres)}
                     />
                     <Input
                       label="Apellidos"
                       value={contactForm.apellidos}
                       onChange={(event) => handleContactInputChange('apellidos', event.target.value)}
+                      disabled={!canEditContactValue(contactForm.apellidos)}
                     />
                     <Input
                       label="Teléfono"
                       value={contactForm.telefono}
                       onChange={(event) => handleContactInputChange('telefono', event.target.value)}
+                      disabled={!canEditContactValue(contactForm.telefono)}
                     />
                     <Input
                       label="Email"
                       type="email"
                       value={contactForm.email}
                       onChange={(event) => handleContactInputChange('email', event.target.value)}
+                      disabled={!canEditContactValue(contactForm.email)}
                     />
                     <Input
                       label="Ocupación"
                       value={contactForm.ocupacion}
                       onChange={(event) => handleContactInputChange('ocupacion', event.target.value)}
+                      disabled={!canEditContactValue(contactForm.ocupacion)}
                     />
                     <Input
                       label="Ciudad"
                       value={contactForm.ciudad}
                       onChange={(event) => handleContactInputChange('ciudad', event.target.value)}
+                      disabled={!canEditContactValue(contactForm.ciudad)}
                     />
                   </div>
                   <TextArea
@@ -1924,6 +2127,7 @@ export const LeadsAdmin = ({
                     minRows={3}
                     value={contactForm.descripcion}
                     onChange={(event) => handleContactInputChange('descripcion', event.target.value)}
+                    disabled={!canEditContactValue(contactForm.descripcion)}
                   />
                   <div className="flex justify-end gap-2 pt-2">
                     <Button type="button" variant="ghost" onClick={handleContactReset} disabled={!editingLead}>
@@ -1942,21 +2146,6 @@ export const LeadsAdmin = ({
 
                 <Accordion title="Datos de operación" defaultOpen>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {!isVendorMode && (
-                      <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2">
-                        <div>
-                          <p className="text-sm font-semibold text-content">Asignaci??n activa</p>
-                          <p className="text-xs text-content-muted">
-                            Controla si el vendedor puede gestionar este lead.
-                          </p>
-                        </div>
-                        <Switch
-                          checked={operationState.active}
-                          onChange={(event) => handleAssignmentToggle(event.target.checked)}
-                          disabled={!currentAssignment || assignmentStateMutation.isPending}
-                        />
-                      </div>
-                    )}
                     <div>
                       <p className="text-xs text-content-muted">Campaña</p>
                       <p className="text-sm font-semibold text-content">{campaignLabel}</p>
@@ -1980,33 +2169,79 @@ export const LeadsAdmin = ({
                   </div>
 
                   <div className="mt-4 space-y-4">
+
                     {!isVendorMode && (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <label className="space-y-1 text-sm text-content">
-                        <span className="font-medium">Cambiar vendedor</span>
-                        <Select
-                          value={operationState.vendorId}
-                          onChange={(event) =>
-                            setOperationState((prev) => ({ ...prev, vendorId: event.target.value }))
-                          }
-                        >
-                          <option value="">Sin asignar</option>
-                          {vendorOptions.map((vendor) => (
-                            <option key={vendor.id} value={vendor.id}>
-                              {vendor.label}
-                            </option>
-                          ))}
-                        </Select>
-                      </label>
-                        <div className="flex items-end">
-                        <Button
-                          type="button"
-                          onClick={handleVendorSave}
-                          disabled={!vendorChanged || assignVendorMutation.isPending}
-                          isLoading={assignVendorMutation.isPending}
-                        >
-                          Actualizar asignación
-                        </Button>
+                      <div className="space-y-3">
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <label className="space-y-1 text-sm text-content">
+                            <span className="font-medium">Cambiar vendedor</span>
+                            <Select
+                              value={operationState.vendorId}
+                              onChange={(event) =>
+                                setOperationState((prev) => ({ ...prev, vendorId: event.target.value }))
+                              }
+                              disabled={!canChangeVendor}
+                            >
+                              <option value="">Sin asignar</option>
+                              {vendorOptions.map((vendor) => (
+                                <option key={vendor.id} value={vendor.id}>
+                                  {vendor.label}
+                                </option>
+                              ))}
+                            </Select>
+                          </label>
+                          <div className="flex items-end">
+                            <Button
+                              type="button"
+                              onClick={handleVendorSave}
+                              disabled={!vendorChanged || assignVendorMutation.isPending || !canChangeVendor}
+                              isLoading={assignVendorMutation.isPending}
+                            >
+                              Actualizar asignaciИn
+                            </Button>
+                          </div>
+                        </div>
+                        {!canChangeVendor && (
+                          <p className="text-xs text-content-muted">
+                            {translate(
+                              'crmLeads.drawer.vendorLocked',
+                              'No puedes cambiar el vendedor en este estado.',
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {isVendorMode && (
+                      <div className="rounded-xl border border-border-subtle bg-surface-muted px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-content-muted">
+                            {translate('crmLeads.drawer.assignmentTitle', 'AsignaciЗn')}
+                          </span>
+                          <p className="text-sm font-semibold text-content">
+                            {assignmentDisplayName ||
+                              translate('crmLeads.drawer.assignmentEmpty', 'Sin vendedor asignado')}
+                          </p>
+                        </div>
+                        <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center">
+                          <Button
+                            type="button"
+                            onClick={handleSelfAssign}
+                            disabled={!canSelfAssign || assignVendorMutation.isPending}
+                            isLoading={assignVendorMutation.isPending}
+                            className="flex-1"
+                          >
+                            {isAssignedToCurrentUser
+                              ? translate('crmLeads.drawer.alreadyAssigned', 'Ya estбs asignado')
+                              : translate('crmLeads.drawer.selfAssign', 'Autoasignarme')}
+                          </Button>
+                          {currentAssignment && !canSelfAssign && !isAssignedToCurrentUser ? (
+                            <span className="text-xs text-warning-600">
+                              {translate(
+                                'crmLeads.drawer.selfAssignBlocked',
+                                'Lead ya asignado a otro vendedor.',
+                              )}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     )}
@@ -2019,6 +2254,7 @@ export const LeadsAdmin = ({
                           onChange={(event) =>
                             setOperationState((prev) => ({ ...prev, statusId: event.target.value }))
                           }
+                          disabled={!canChangeStatus}
                         >
                           <option value="">Selecciona un estado</option>
                           {statusOptions.map((status) => (
@@ -2027,12 +2263,17 @@ export const LeadsAdmin = ({
                             </option>
                           ))}
                         </Select>
+                        {statusBlockedMessage ? (
+                          <span className="text-xs text-warning-600 dark:text-warning-300">
+                            {statusBlockedMessage}
+                          </span>
+                        ) : null}
                       </label>
-                      <div className="flex items-end">
+                      <div className="flex flex-col items-end gap-1">
                         <Button
                           type="button"
                           onClick={handleStatusSave}
-                          disabled={!statusChanged || statusMutation.isPending}
+                          disabled={!statusChanged || statusMutation.isPending || !canChangeStatus}
                           isLoading={statusMutation.isPending}
                         >
                           Actualizar estado

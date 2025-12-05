@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Switch } from '@/components/ui/Switch';
 import { useToast } from '@/components/common/Toasts';
 import { useAuth } from '@/store/auth';
 import { Badge } from '@/components/ui/Badge';
@@ -26,6 +27,7 @@ type NewUserForm = {
   email: string;
   password: string;
   roleId: number;
+  status: number;
 };
 
 const buildInitialForm = (): NewUserForm => ({
@@ -34,6 +36,7 @@ const buildInitialForm = (): NewUserForm => ({
   email: '',
   password: '',
   roleId: ROLE_OPTIONS[0]?.value ?? 1,
+  status: 1,
 });
 
 export const Usuarios = () => {
@@ -80,7 +83,7 @@ export const Usuarios = () => {
         apellidos: form.apellidos.trim(),
         email: form.email.trim(),
         password: form.password,
-        estado: 1,
+        estado: form.status ?? 1,
       });
     },
     onSuccess: () => {
@@ -124,6 +127,7 @@ export const Usuarios = () => {
         apellidos: payload.apellidos.trim(),
         email: payload.email.trim(),
         id_rol: payload.roleId,
+        estado: payload.status,
         ...(payload.password.trim() ? { password: payload.password } : {}),
       });
     },
@@ -170,6 +174,7 @@ export const Usuarios = () => {
       email: usuario.email ?? '',
       password: '',
       roleId: usuario.rol?.id_rol ?? ROLE_OPTIONS[0].value,
+      status: typeof usuario.estado === 'number' ? usuario.estado : 1,
     });
     setEditDialogOpen(true);
   };
@@ -338,6 +343,17 @@ export const Usuarios = () => {
             onChange={(event) => setEditForm((prev) => ({ ...prev, roleId: Number(event.target.value) }))}
             options={ROLE_OPTIONS.map((option) => ({ label: option.label, value: String(option.value) }))}
           />
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-border px-3 py-3">
+            <div>
+              <p className="text-sm font-medium text-content">{t('crmUsers.form.statusLabel')}</p>
+              <p className="text-xs text-content-muted">{t('crmUsers.form.statusHelper')}</p>
+            </div>
+            <Switch
+              checked={editForm.status === 1}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, status: event.target.checked ? 1 : 0 }))}
+              aria-label={t('crmUsers.form.statusLabel')}
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>
               {t('common.cancel')}

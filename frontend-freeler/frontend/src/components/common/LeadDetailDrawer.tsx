@@ -1,5 +1,6 @@
 import { ReactNode, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/utils/cn';
 
@@ -39,8 +40,9 @@ export const LeadDetailDrawer = ({ open, onClose, title, children, footer }: Lea
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-border-subtle px-5 py-4">
-          <h2 className="text-base font-semibold text-content">{title}</h2>
-          <Button variant="ghost" onClick={onClose}>
+          <h2 className="text-lg font-semibold text-content">{title}</h2>
+          <Button variant="ghost" onClick={onClose} className="flex items-center gap-2 text-danger-600">
+            <X className="h-4 w-4" aria-hidden />
             Cerrar
           </Button>
         </header>

@@ -11,9 +11,7 @@ import DashboardReferidos from '@/pages/referidos/Dashboard';
 import Capacitacion from '@/pages/referidos/Capacitacion';
 import HomeAdmin from '@/pages/crm/HomeAdmin';
 import Usuarios from '@/pages/crm/Usuarios';
-import HomeSupervisor from '@/pages/crm/HomeSuperadmin';
 import Campanas from '@/pages/crm/Campanas';
-import LeadsSupervisor from '@/pages/crm/LeadsSuperadmin';
 import LeadsAdmin from '@/pages/crm/LeadsAdmin';
 import HomeVendedor from '@/pages/crm/HomeVendedor';
 import LeadsVendedor from '@/pages/crm/LeadsVendedor';
@@ -49,7 +47,7 @@ const CrmLanding = () => {
 };
 
 export const AppRouter = () => (
-  <BrowserRouter>
+  <BrowserRouter future={{ v7_relativeSplatPath: true }}>
     <Routes>
       <Route element={<ReferidosLayout />}>
         <Route path={APP_ROUTES.referidos.home} element={<HomeReferidos />} />
@@ -153,7 +151,7 @@ export const AppRouter = () => (
           path={APP_ROUTES.crm.supervisor.home}
           element={
             <GuardedRoute allow={[Role.SUPERVISOR]}>
-              <HomeSupervisor />
+              <HomeAdmin variant="supervisor" />
             </GuardedRoute>
           }
         />
@@ -161,7 +159,7 @@ export const AppRouter = () => (
           path={APP_ROUTES.crm.supervisor.leads}
           element={
             <GuardedRoute allow={[Role.SUPERVISOR]}>
-              <LeadsSupervisor />
+              <LeadsAdmin variant="supervisor" showOriginColumn={false} showOriginFilter={false} />
             </GuardedRoute>
           }
         />

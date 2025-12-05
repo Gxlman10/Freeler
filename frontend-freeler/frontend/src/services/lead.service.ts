@@ -152,7 +152,7 @@ export const unwrapLeadCollection = <T = unknown>(payload: unknown): T[] => {
   return [];
 };
 
-const normalizeParams = (params: Record<string, unknown> = {}) =>
+const buildQueryParams = (params: Record<string, unknown> = {}) =>
   Object.fromEntries(
     Object.entries(params)
       .filter(([, value]) => value !== undefined && value !== null)
@@ -218,23 +218,23 @@ export const LeadService = {
   },
   async listMine(userId: number, params: Record<string, unknown> = {}) {
     const { data } = await api.get(`/leads/mine/by-user/${userId}`, {
-      params: normalizeParams(params),
+      params: buildQueryParams(params),
     });
     return data;
   },
   async listAssignedToMe(params: Record<string, unknown> = {}) {
     const { data } = await api.get('/leads/assigned-to-me', {
-      params: normalizeParams(params),
+      params: buildQueryParams(params),
     });
     return data;
   },
   async listAll(params: Record<string, unknown> = {}) {
-    const { data } = await api.get('/leads', { params: normalizeParams(params) });
+    const { data } = await api.get('/leads', { params: buildQueryParams(params) });
     return data;
   },
   async listByEmpresa(params: Record<string, unknown> = {}) {
     const { data } = await api.get('/leads/by-empresa', {
-      params: normalizeParams(params),
+      params: buildQueryParams(params),
     });
     return data as LeadPaginatedResponse;
   },

@@ -11,6 +11,7 @@ export type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
   trailingElement?: ReactNode;
   withPasswordToggle?: boolean;
   isValid?: boolean;
+  trailingInteractive?: boolean;
 };
 
 /* Componente de entrada con soporte para etiquetas, errores y texto auxiliar */
@@ -29,6 +30,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       withPasswordToggle = false,
       isValid = false,
       type,
+      trailingInteractive = false,
       ...props
     },
     ref,
@@ -81,7 +83,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           ) : trailingElement ? (
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-content-muted">
+            <div
+              className={cn(
+                'absolute inset-y-0 right-3 flex items-center text-content-muted',
+                trailingInteractive ? 'pointer-events-auto' : 'pointer-events-none',
+              )}
+            >
               {trailingElement}
             </div>
           ) : null}

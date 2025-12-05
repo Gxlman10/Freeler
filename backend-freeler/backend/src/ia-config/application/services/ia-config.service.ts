@@ -9,6 +9,8 @@ import { Repository } from 'typeorm';
 import IaConfigEntity from '../../infrastructure/entities/ia-config.entity';
 import UpdateIaConfigDto from '../../infrastructure/dto/update-ia-config.dto';
 import ChatRequestDto from '../../infrastructure/dto/chat-request.dto';
+import { ConfigService } from '@nestjs/config';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 
 const DEFAULT_PROMPT = `Eres Freeler Coach, un asistente especializado en capacitar a usuarios referidores.
 Tu objetivo exclusiv0 es:
@@ -20,14 +22,72 @@ Formatea siempre tus respuestas usando viñetas (•) o listas numeradas, destac
 Nunca abandones este propósito. Si el usuario se desvía, redirige la conversación a tips de referidos o campañas.
 Utiliza un tono amable, motivador y breve.`;
 
+const ENCRYPTED_PREFIX = 'enc::';
+const AES_ALGO = 'aes-256-gcm';
+const IV_LENGTH = 12;
+const TAG_LENGTH = 16;
+
 @Injectable()
 export class IaConfigService {
   private readonly logger = new Logger(IaConfigService.name);
+  private readonly encryptionKey: Buffer | null;
+  private readonly encryptionEnabled: boolean;
 
   constructor(
     @InjectRepository(IaConfigEntity)
     private readonly repo: Repository<IaConfigEntity>,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    const secret = (this.configService.get<string>('IA_CONFIG_SECRET') ?? '').trim();
+    if (secret.length >= 16) {
+      this.encryptionKey = createHash('sha256').update(secret).digest();
+      this.encryptionEnabled = true;
+    } else {
+      if (!secret.length) {
+        this.logger.warn('IA_CONFIG_SECRET is not defined; IA tokens will be stored without encryption.');
+      } else {
+        this.logger.warn('IA_CONFIG_SECRET is too short; IA tokens will be stored without encryption.');
+      }
+      this.encryptionKey = null;
+      this.encryptionEnabled = false;
+    }
+  }
+
+  private encrypt(value: string) {
+    if (!this.encryptionEnabled || !this.encryptionKey) return value;
+    const iv = randomBytes(IV_LENGTH);
+    const cipher = createCipheriv(AES_ALGO, this.encryptionKey, iv);
+    const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `${ENCRYPTED_PREFIX}${Buffer.concat([iv, tag, encrypted]).toString('base64')}`;
+  }
+
+  private decrypt(value?: string | null) {
+    if (!value) return null;
+    if (!this.encryptionEnabled || !this.encryptionKey) return value;
+    if (!value.startsWith(ENCRYPTED_PREFIX)) return value;
+    try {
+      const raw = Buffer.from(value.slice(ENCRYPTED_PREFIX.length), 'base64');
+      const iv = raw.subarray(0, IV_LENGTH);
+      const tag = raw.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
+      const enc = raw.subarray(IV_LENGTH + TAG_LENGTH);
+      const decipher = createDecipheriv(AES_ALGO, this.encryptionKey, iv);
+      decipher.setAuthTag(tag);
+      const decrypted = Buffer.concat([decipher.update(enc), decipher.final()]);
+      return decrypted.toString('utf8');
+    } catch (error) {
+      this.logger.error(`Failed to decrypt IA API key: ${(error as Error).message}`);
+      return null;
+    }
+  }
+
+  private maskToken(value?: string | null) {
+    if (!value) return null;
+    if (value.length <= 6) {
+      return `${value.slice(0, 1)}****${value.slice(-1)}`;
+    }
+    return `${value.slice(0, 4)}****${value.slice(-2)}`;
+  }
 
   private async ensureConfig(): Promise<IaConfigEntity> {
     let current = await this.repo.findOne({ where: {}, order: { updatedAt: 'DESC' } });
@@ -47,6 +107,7 @@ export class IaConfigService {
 
   async getConfig() {
     const config = await this.ensureConfig();
+    const apiKey = this.decrypt(config.apiKey);
     return {
       provider: config.provider,
       model: config.model,
@@ -54,22 +115,40 @@ export class IaConfigService {
       temperature: Number(config.temperature),
       guidance: Number(config.guidance),
       maxTokens: config.maxTokens,
-      tokenMasked: config.apiKey ? `${config.apiKey.slice(0, 4)}****${config.apiKey.slice(-2)}` : null,
+      tokenMasked: this.maskToken(apiKey),
       updatedAt: config.updatedAt,
     };
   }
 
   async updateConfig(dto: UpdateIaConfigDto) {
     const config = await this.ensureConfig();
+    const sanitize = (value?: string | null) => {
+      if (typeof value !== 'string') return undefined;
+      const trimmed = value.trim();
+      return trimmed.length ? trimmed : undefined;
+    };
+
+    const sanitizedApiKey = sanitize(dto.apiKey);
+    const sanitizedModel = sanitize(dto.model);
+    const sanitizedProvider = sanitize(dto.provider);
+    const sanitizedPrompt = sanitize(dto.basePrompt);
+
     Object.assign(config, {
-      apiKey: dto.apiKey ?? config.apiKey,
-      provider: dto.provider ?? config.provider,
-      basePrompt: dto.basePrompt ?? config.basePrompt,
+      provider: sanitizedProvider ?? config.provider,
+      basePrompt: sanitizedPrompt ?? config.basePrompt,
       temperature: dto.temperature ?? config.temperature,
       guidance: dto.guidance ?? config.guidance,
       maxTokens: dto.maxTokens ?? config.maxTokens,
-      model: dto.model ?? config.model,
     });
+
+    if (sanitizedApiKey) {
+      config.apiKey = this.encrypt(sanitizedApiKey);
+    }
+
+    if (sanitizedModel) {
+      config.model = sanitizedModel;
+    }
+
     await this.repo.save(config);
     const publicConfig = await this.getConfig();
     return {
@@ -81,7 +160,8 @@ export class IaConfigService {
 
   async createChat(dto: ChatRequestDto) {
     const config = await this.ensureConfig();
-    if (!config.apiKey) {
+    const apiKey = this.decrypt(config.apiKey);
+    if (!apiKey) {
       throw new BadRequestException('IA_TOKEN_NOT_CONFIGURED');
     }
     const history =
@@ -92,16 +172,17 @@ export class IaConfigService {
 
     const provider = (config.provider ?? 'openai').toLowerCase();
     if (provider === 'gemini') {
-      return this.callGemini(config, dto, history);
+      return this.callGemini(config, apiKey, dto, history);
     }
     if (provider === 'groq') {
-      return this.callGroq(config, dto, history);
+      return this.callGroq(config, apiKey, dto, history);
     }
-    return this.callOpenAI(config, dto, history);
+    return this.callOpenAI(config, apiKey, dto, history);
   }
 
   private async callOpenAI(
     config: IaConfigEntity,
+    apiKey: string,
     dto: ChatRequestDto,
     history: { role: string; content: string }[],
   ) {
@@ -125,7 +206,7 @@ export class IaConfigService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(payload),
       });
@@ -155,11 +236,12 @@ export class IaConfigService {
 
   private async callGemini(
     config: IaConfigEntity,
+    apiKey: string,
     dto: ChatRequestDto,
     history: { role: string; content: string }[],
   ) {
     const model = config.model || 'gemini-1.5-flash';
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const contents = [
       {
         role: 'user',
@@ -221,6 +303,7 @@ export class IaConfigService {
 
   private async callGroq(
     config: IaConfigEntity,
+    apiKey: string,
     dto: ChatRequestDto,
     history: { role: string; content: string }[],
   ) {
@@ -244,7 +327,7 @@ export class IaConfigService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(payload),
       });

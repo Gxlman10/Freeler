@@ -32,6 +32,7 @@ export const MultiSelect = ({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const controlId = useId();
+  const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
 
   const toggleValue = (value: string) => {
     const exists = values.includes(value);
@@ -52,6 +53,18 @@ export const MultiSelect = ({
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const updateWidth = () => {
+      if (triggerRef.current) {
+        setDropdownWidth(triggerRef.current.getBoundingClientRect().width);
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
   }, [open]);
 
   const displayLabel = useMemo(() => {
@@ -89,7 +102,11 @@ export const MultiSelect = ({
         {open && (
           <div
             ref={listRef}
-            className="absolute left-0 right-0 z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border border-border bg-surface shadow-lg"
+            className="absolute left-0 z-30 mt-1 max-h-56 min-w-full overflow-auto rounded-md border border-border bg-surface shadow-lg"
+            style={{
+              width: 'max-content',
+              minWidth: dropdownWidth ?? undefined,
+            }}
             role="listbox"
             aria-labelledby={controlId}
           >

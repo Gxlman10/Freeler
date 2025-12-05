@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Loader2 } from 'lucide-react';
 import { formatDate } from '@/utils/helpers';
 import { getStatusBadgeVariant, normalizeStatusLabel } from '@/utils/badges';
+import { Role } from '@/utils/constants';
 
 type LeadContactFormState = {
   nombres: string;
@@ -136,14 +137,18 @@ type LeadEditorDrawerProps = {
   lead: Lead | null;
   open: boolean;
   onClose: () => void;
-  variant?: 'admin' | 'vendor';
+  variant?: 'admin' | 'supervisor' | 'vendor';
   onUpdated?: () => void;
 };
 
-export const LeadEditorDrawer = ({ lead, open, onClose, variant = 'admin', onUpdated }: LeadEditorDrawerProps) => {
+export const LeadEditorDrawer = ({ lead, open, onClose, variant, onUpdated }: LeadEditorDrawerProps) => {
   const { push } = useToast();
   const { user } = useAuth();
-  const isVendorMode = variant === 'vendor';
+  const resolvedVariant =
+    variant ??
+    (user?.role === Role.VENDEDOR ? 'vendor' : user?.role === Role.SUPERVISOR ? 'supervisor' : 'admin');
+  const isVendorMode = resolvedVariant === 'vendor';
+  const isSupervisorMode = resolvedVariant === 'supervisor';
   const [activeLead, setActiveLead] = useState<Lead | null>(lead);
   const [activeLeadTab, setActiveLeadTab] = useState<'details' | 'history'>('details');
   const [contactForm, setContactForm] = useState<LeadContactFormState>(() => buildContactSnapshot(lead));
@@ -484,7 +489,7 @@ export const LeadEditorDrawer = ({ lead, open, onClose, variant = 'admin', onUpd
 
               <Accordion title="Datos de operación" defaultOpen>
                 <div className="grid gap-3 md:grid-cols-2">
-                  {!isVendorMode && (
+                  {!isVendorMode && !isSupervisorMode && (
                     <div>
                       <p className="text-xs text-content-muted">Origen</p>
                       <p className="text-sm font-semibold text-content">{originLabel}</p>

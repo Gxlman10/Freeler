@@ -3,8 +3,6 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/store/auth';
 import { LeadService } from '@/services/lead.service';
 import { CommissionService, type Commission } from '@/services/commission.service';
-import { KPI } from '@/components/common/KPI';
-import { MiniChart } from '@/components/common/MiniChart';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Dialog } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
@@ -13,6 +11,7 @@ import { useToast } from '@/components/common/Toasts';
 import { formatCurrency } from '@/utils/helpers';
 import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/common/Alert';
+import { Users, FileEdit, Send, Percent, Wallet, Clock3, CheckCircle2 } from 'lucide-react';
 
 const EMPTY_SUMMARY = {
   totals: {
@@ -42,6 +41,16 @@ const getCommissionStatusMeta = (commission?: Commission | null) => {
   };
 };
 
+const getCommissionLeadName = (commission?: Commission | null) => {
+  if (!commission) return 'Lead';
+  const first = commission.lead?.nombres ?? '';
+  const last = commission.lead?.apellidos ?? '';
+  const full = `${first} ${last}`.trim();
+  if (full) return full;
+  if (commission.id_lead) return `Lead #${commission.id_lead}`;
+  return 'Lead';
+};
+
 type PaymentContext = {
   mode: 'bulk' | 'single';
   commission: Commission | null;
@@ -67,6 +76,9 @@ const formatDateLabel = (value?: string | null) => {
     timeStyle: 'short',
   }).format(date);
 };
+
+const numberFormatter = new Intl.NumberFormat('es-PE');
+const formatNumber = (value: number) => numberFormatter.format(value);
 
 export const DashboardReferidos = () => {
   const { user } = useAuth();
@@ -180,14 +192,6 @@ export const DashboardReferidos = () => {
     (lead) => lead.estado?.nombre?.toLowerCase() === 'ganado',
   ).length;
   const conversion = sentCount ? Math.round((wonCount / sentCount) * 100) : 0;
-  const chartData = sentLeads
-    .slice()
-    .sort(
-      (a, b) =>
-        new Date(a.fecha_creacion ?? 0).getTime() - new Date(b.fecha_creacion ?? 0).getTime(),
-    )
-    .slice(-12)
-    .map((lead) => (lead.estado?.nombre?.toLowerCase() === 'ganado' ? 2 : 1));
   const lastSentTimestamp = sentLeads.reduce((latest, lead) => {
     const createdAt = lead.fecha_creacion ? new Date(lead.fecha_creacion).getTime() : 0;
     return createdAt > latest ? createdAt : latest;
@@ -257,6 +261,63 @@ export const DashboardReferidos = () => {
       ? 'Solicitar pago'
       : 'Solicitar pendientes';
 
+  const statCards = [
+    {
+      key: 'totalLeads',
+      label: 'Referidos totales',
+      value: formatNumber(leads.length),
+      icon: Users,
+      accent: 'from-primary-500/10 to-transparent',
+    },
+    {
+      key: 'drafts',
+      label: 'Borradores pendientes',
+      value: formatNumber(draftsCount),
+      icon: FileEdit,
+      accent: 'from-amber-500/10 to-transparent',
+    },
+    {
+      key: 'sent',
+      label: 'Referidos enviados',
+      value: formatNumber(sentCount),
+      icon: Send,
+      accent: 'from-sky-500/10 to-transparent',
+      helper: sentCount ? `${wonCount} ganados` : undefined,
+    },
+    {
+      key: 'conversion',
+      label: 'Conversión',
+      value: `${conversion}%`,
+      icon: Percent,
+      accent: 'from-indigo-500/10 to-transparent',
+      helper: sentCount ? 'sobre enviados' : undefined,
+    },
+  ];
+
+  const commissionCards = [
+    {
+      key: 'pending',
+      label: 'Pendiente',
+      value: formatCurrency(pendingAmount),
+      icon: Clock3,
+      accent: 'from-orange-500/10 to-transparent',
+    },
+    {
+      key: 'requested',
+      label: 'Solicitado',
+      value: formatCurrency(Number(summary.totals.solicitada || 0)),
+      icon: Wallet,
+      accent: 'from-blue-500/10 to-transparent',
+    },
+    {
+      key: 'paid',
+      label: 'Pagado',
+      value: formatCurrency(Number(summary.totals.pagada || 0)),
+      icon: CheckCircle2,
+      accent: 'from-emerald-500/10 to-transparent',
+    },
+  ];
+
   return (
     <section className="space-y-6">
       <header>
@@ -268,41 +329,67 @@ export const DashboardReferidos = () => {
 
       {hasLeads ? (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <KPI label="Referidos totales" value={leads.length} />
-            <KPI label="Borradores pendientes" value={draftsCount} />
-            <KPI
-              label="Enviados"
-              value={sentCount}
-              trend={sentCount ? { label: 'ganados', value: wonCount } : undefined}
-            />
-            <KPI
-              label="Conversión"
-              value={`${conversion}%`}
-              trend={sentCount ? { label: 'sobre enviados', value: conversion } : undefined}
-            />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {statCards.map((card) => (
+              <article
+                key={card.key}
+                className={`rounded-2xl border border-border-subtle bg-gradient-to-b ${card.accent} p-4 shadow-card`}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-content-muted">{card.label}</p>
+                    <p className="mt-2 text-2xl font-semibold text-content">{card.value}</p>
+                    {card.helper ? (
+                      <p className="text-xs text-content-muted">{card.helper}</p>
+                    ) : null}
+                  </div>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/70 text-primary-600 dark:bg-white/10">
+                    <card.icon className="h-5 w-5" aria-hidden />
+                  </span>
+                </div>
+              </article>
+            ))}
           </div>
 
-          <div className="rounded-lg border border-border bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-content">Actividad reciente</h2>
-            <p className="mt-1 text-sm text-content-muted">
-              Histórico de los últimos referidos enviados. Los valores en 2 representan referidos ganados.
-            </p>
-            <MiniChart data={chartData} className="mt-4 h-20 w-full" />
-            <ul className="mt-6 grid gap-3 text-sm text-content-muted md:grid-cols-2">
-              <li>
-                <strong className="text-content">Ganados:</strong> {wonCount}
-              </li>
-              <li>
-                <strong className="text-content">En progreso:</strong> {Math.max(sentCount - wonCount, 0)}
-              </li>
-              <li>
-                <strong className="text-content">Último envío:</strong> {lastSentFormatted}
-              </li>
-              <li>
-                <strong className="text-content">Borradores listos:</strong> {draftsCount}
-              </li>
-            </ul>
+          <div className="grid gap-4 rounded-lg border border-border bg-surface p-6 shadow-sm lg:grid-cols-2">
+            <div>
+              <h2 className="text-lg font-semibold text-content">Actividad de referidos</h2>
+              <p className="mt-1 text-sm text-content-muted">
+                Un vistazo rápido a tu desempeño reciente. Mantén tus registros actualizados para
+                acelerar tus oportunidades.
+              </p>
+              <dl className="mt-6 grid gap-3 text-sm md:grid-cols-2">
+                <div className="rounded-lg border border-border-subtle bg-field p-3">
+                  <dt className="text-content-muted">Ganados</dt>
+                  <dd className="text-xl font-semibold text-content">{wonCount}</dd>
+                </div>
+                <div className="rounded-lg border border-border-subtle bg-field p-3">
+                  <dt className="text-content-muted">En gestión</dt>
+                  <dd className="text-xl font-semibold text-content">
+                    {Math.max(sentCount - wonCount, 0)}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-border-subtle bg-field p-3">
+                  <dt className="text-content-muted">Borradores listos</dt>
+                  <dd className="text-xl font-semibold text-content">{draftsCount}</dd>
+                </div>
+                <div className="rounded-lg border border-border-subtle bg-field p-3">
+                  <dt className="text-content-muted">Enviados totales</dt>
+                  <dd className="text-xl font-semibold text-content">{sentCount}</dd>
+                </div>
+              </dl>
+            </div>
+            <div className="flex flex-col justify-between rounded-lg border border-primary-500/40 bg-gradient-to-b from-primary-500/10 to-transparent p-4 text-sm text-content">
+              <div>
+                <p className="text-content-muted">Último envío</p>
+                <p className="mt-2 text-2xl font-semibold text-content">{lastSentFormatted}</p>
+              </div>
+              <p className="mt-4 text-content-muted">
+                Ganados confirmados: <span className="font-semibold text-content">{wonCount}</span>.
+                {` `}
+                {wonCount ? 'Sigue gestionando para mantener la racha.' : 'Aprovecha para contactar tus referidos.'}
+              </p>
+            </div>
           </div>
         </>
       ) : (
@@ -325,9 +412,22 @@ export const DashboardReferidos = () => {
           </Button>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <KPI label="Pendiente" value={formatCurrency(pendingAmount)} />
-          <KPI label="Solicitado" value={formatCurrency(Number(summary.totals.solicitada || 0))} />
-          <KPI label="Pagado" value={formatCurrency(Number(summary.totals.pagada || 0))} />
+          {commissionCards.map((card) => (
+            <article
+              key={card.key}
+              className={`rounded-2xl border border-border-subtle bg-gradient-to-b ${card.accent} p-4 shadow-card`}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-content-muted">{card.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-content">{card.value}</p>
+                </div>
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/70 text-primary-600 dark:bg-white/10">
+                  <card.icon className="h-5 w-5" aria-hidden />
+                </span>
+              </div>
+            </article>
+          ))}
         </div>
         <div className="mt-6 overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
@@ -378,10 +478,11 @@ export const DashboardReferidos = () => {
           </Button>
         </div>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[820px] text-left text-sm">
             <thead>
               <tr className="text-xs uppercase tracking-wide text-content-muted">
                 <th className="pb-2">Campaña</th>
+                <th className="pb-2">Lead</th>
                 <th className="pb-2">Monto</th>
                 <th className="pb-2">Estado</th>
                 <th className="pb-2">Fecha de pago</th>
@@ -392,11 +493,13 @@ export const DashboardReferidos = () => {
               {commissions.length ? (
                 commissions.map((commission) => {
                   const statusMeta = getCommissionStatusMeta(commission);
+                  const leadName = getCommissionLeadName(commission);
                   return (
                     <tr key={commission.id_comision}>
                       <td className="py-2 font-medium text-content">
                         {commission.campania?.nombre ?? 'Sin campaña'}
                       </td>
+                      <td className="py-2 text-content">{leadName}</td>
                       <td className="py-2 text-content">
                         {formatCurrency(Number(commission.monto ?? 0))}
                       </td>
@@ -422,7 +525,7 @@ export const DashboardReferidos = () => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="py-3 text-center text-content-muted">
+                  <td colSpan={6} className="py-3 text-center text-content-muted">
                     Aún no se registran comisiones.
                   </td>
                 </tr>

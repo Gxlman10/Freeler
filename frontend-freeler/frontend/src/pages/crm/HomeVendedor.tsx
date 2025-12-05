@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { LeadService } from '@/services/lead.service';
 import type { Lead } from '@/services/lead.service';
-import { KPI } from '@/components/common/KPI';
 import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Users, Target, Trophy, Activity, UserX, Sparkles } from 'lucide-react';
@@ -49,55 +48,81 @@ export const HomeVendedor = () => {
   }).length;
   const conversionRate = leads.length ? Math.round((ganados / leads.length) * 100) : 0;
 
+  const statCards = [
+    {
+      key: 'assigned',
+      label: t('crmVendorHome.kpis.assigned'),
+      value: leads.length,
+      icon: Users,
+      accent: 'from-primary-500/10 to-transparent',
+    },
+    {
+      key: 'inProgress',
+      label: t('crmVendorHome.kpis.inProgress'),
+      value: activos,
+      icon: Activity,
+      accent: 'from-amber-500/10 to-transparent',
+    },
+    {
+      key: 'won',
+      label: t('crmVendorHome.kpis.won'),
+      value: ganados,
+      icon: Trophy,
+      accent: 'from-emerald-500/10 to-transparent',
+    },
+    {
+      key: 'lost',
+      label: t('crmVendorHome.kpis.lost'),
+      value: perdidos,
+      icon: Target,
+      accent: 'from-rose-500/10 to-transparent',
+    },
+    {
+      key: 'conversion',
+      label: t('crmVendorHome.kpis.conversion'),
+      value: `${conversionRate}%`,
+      icon: Sparkles,
+      accent: 'from-indigo-500/10 to-transparent',
+    },
+    {
+      key: 'unassigned',
+      label: t('crmVendorHome.kpis.unassigned'),
+      value: sinAsignar,
+      icon: UserX,
+      accent: 'from-slate-500/10 to-transparent',
+    },
+    {
+      key: 'newLeads',
+      label: t('crmVendorHome.kpis.newLeads'),
+      value: nuevos,
+      icon: Users,
+      accent: 'from-sky-500/10 to-transparent',
+    },
+  ];
+
   return (
     <section className="space-y-6">
       <header>
         <h1 className="text-3xl font-semibold text-content">{t('crmVendorHome.title')}</h1>
         <p className="text-sm text-content-muted">{t('crmVendorHome.subtitle')}</p>
       </header>
-      <div className="grid gap-4 md:grid-cols-4">
-        <KPI
-          label={t('crmVendorHome.kpis.assigned')}
-          value={leads.length}
-          icon={<Users className="h-5 w-5" />}
-          className="border-l-4 border-primary-500 bg-primary-50 dark:bg-primary-500/10"
-        />
-        <KPI
-          label={t('crmVendorHome.kpis.inProgress')}
-          value={activos}
-          icon={<Activity className="h-5 w-5" />}
-          className="border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-500/10"
-        />
-        <KPI
-          label={t('crmVendorHome.kpis.won')}
-          value={ganados}
-          icon={<Trophy className="h-5 w-5" />}
-          className="border-l-4 border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10"
-        />
-        <KPI
-          label={t('crmVendorHome.kpis.lost')}
-          value={perdidos}
-          icon={<Target className="h-5 w-5" />}
-          className="border-l-4 border-rose-500 bg-rose-50 dark:bg-rose-500/10"
-        />
-        <KPI
-          label={t('crmVendorHome.kpis.conversion')}
-          value={`${conversionRate}%`}
-          icon={<Sparkles className="h-5 w-5" />}
-          className="border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
-        />
-        <KPI
-          label={t('crmVendorHome.kpis.unassigned')}
-          value={sinAsignar}
-          icon={<UserX className="h-5 w-5" />}
-          className="border-l-4 border-slate-500 bg-slate-50 dark:bg-slate-600/20"
-        />
-        <KPI
-          label={t('crmVendorHome.kpis.newLeads')}
-          value={nuevos}
-          icon={<Users className="h-5 w-5" />}
-          className="border-l-4 border-sky-500 bg-sky-50 dark:bg-sky-500/10"
-        />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {statCards.map((card) => (
+          <article
+            key={card.key}
+            className={`rounded-2xl border border-border-subtle bg-gradient-to-b ${card.accent} p-4 shadow-card`}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-content-muted">{card.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-content">{card.value}</p>
+              </div>
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/70 text-primary-600 dark:bg-white/10">
+                <card.icon className="h-5 w-5" aria-hidden />
+              </span>
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );

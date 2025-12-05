@@ -11,7 +11,7 @@ import {
   COMISION_REPOSITORY,
   IComisionRepository,
 } from '../interfaces/comision.repository.interface';
-import { ComisionRetiroEntity } from '../../infrastructure/entities/comision-retiro.entity';
+import { ComisionSolicitudEntity } from '../../infrastructure/entities/comision-solicitud.entity';
 import RequestCommissionPayoutDto from '../../infrastructure/dto/request-commission-payout.dto';
 import { COMISION_ESTADO_SOLICITADA } from '../services/commission-accounting.service';
 
@@ -20,8 +20,8 @@ export class RequestCommissionPayoutUseCase {
   constructor(
     @Inject(COMISION_REPOSITORY)
     private readonly comisiones: IComisionRepository,
-    @InjectRepository(ComisionRetiroEntity)
-    private readonly retiroRepo: Repository<ComisionRetiroEntity>,
+    @InjectRepository(ComisionSolicitudEntity)
+    private readonly solicitudRepo: Repository<ComisionSolicitudEntity>,
   ) {}
 
   async execute(
@@ -44,7 +44,7 @@ export class RequestCommissionPayoutUseCase {
       throw new BadRequestException('COMISION_YA_PAGADA');
     }
 
-    const existingPending = await this.retiroRepo.findOne({
+    const existingPending = await this.solicitudRepo.findOne({
       where: {
         id_comision: comisionId,
         estado: 'pendiente',
@@ -76,17 +76,21 @@ export class RequestCommissionPayoutUseCase {
       }
     }
 
-    const request = this.retiroRepo.create({
+    const request = this.solicitudRepo.create({
       id_comision: comisionId,
       id_usuario_freeler: usuarioFreelerId,
-      monto: comision.monto,
       metodo_pago: dto.metodo_pago,
-      detalles,
+      datos_pago: {
+        ...detalles,
+        monto: comision.monto,
+        ...(dto.notas ? { notas: dto.notas } : {}),
+      },
       estado: 'pendiente',
     });
-    const saved = await this.retiroRepo.save(request);
+    const saved = await this.solicitudRepo.save(request);
     await this.comisiones.update(comisionId, {
       id_estado_comision: COMISION_ESTADO_SOLICITADA,
+      id_solicitud: saved.id_solicitud,
     });
     return saved;
   }

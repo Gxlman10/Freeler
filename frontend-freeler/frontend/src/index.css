@@ -8,6 +8,7 @@
 :root {
   color-scheme: light;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mobile-scale: 1;
   /* Colores de fondo */
   --color-background: #f8fafc;
   --color-background-subtle: #eef2ff;
@@ -102,7 +103,39 @@ a {
 }
 
 @media (max-width: 640px) {
+  :root {
+    --mobile-scale: 0.7;
+  }
+
   html {
-    font-size: 17px;
+    font-size: calc(16px * var(--mobile-scale));
+  }
+
+  body,
+  button,
+  input,
+  select,
+  textarea {
+    font-size: 0.95rem;
+  }
+
+  button,
+  .btn {
+    padding: 0.55rem 0.9rem;
+  }
+
+  svg,
+  .icon {
+    width: calc(1em * var(--mobile-scale));
+    height: calc(1em * var(--mobile-scale));
+  }
+
+  .crm-mobile-footer {
+    font-size: calc((1rem / var(--mobile-scale)) * 0.85);
+  }
+
+  .crm-mobile-footer svg {
+    width: 1.1em;
+    height: 1.1em;
   }
 }

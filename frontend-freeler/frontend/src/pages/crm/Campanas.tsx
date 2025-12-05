@@ -360,7 +360,7 @@ export const Campanas = () => {
           <TableHeader>
             <TableRow>
               <TableHead>{t('crmCampaigns.table.name')}</TableHead>
-              <TableHead>{t('crmCampaigns.table.commission')}</TableHead>
+              {isAdmin && <TableHead>{t('crmCampaigns.table.commission')}</TableHead>}
               <TableHead>{t('crmCampaigns.table.validity')}</TableHead>
               <TableHead>{t('crmCampaigns.table.status')}</TableHead>
               <TableHead className="text-right">{t('crmCampaigns.table.actions')}</TableHead>
@@ -377,7 +377,7 @@ export const Campanas = () => {
               return (
                 <TableRow key={campaign.id_campania}>
                   <TableCell>{campaign.nombre}</TableCell>
-                  <TableCell>{formatCurrency(safeCommission)}</TableCell>
+                  {isAdmin && <TableCell>{formatCurrency(safeCommission)}</TableCell>}
                   <TableCell>
                     {formatDate(campaign.fecha_inicio)} - {formatDate(campaign.fecha_fin)}
                   </TableCell>
@@ -407,7 +407,7 @@ export const Campanas = () => {
             })}
             {!campaigns.length && (
               <TableRow>
-                <TableCell colSpan={5}>{t('crmCampaigns.table.empty')}</TableCell>
+                <TableCell colSpan={isAdmin ? 5 : 4}>{t('crmCampaigns.table.empty')}</TableCell>
               </TableRow>
             )}
           </TableBody>

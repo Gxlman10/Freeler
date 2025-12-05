@@ -17,13 +17,14 @@ type DialogProps = {
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'full';
 };
 
 const sizeClasses = {
   sm: 'max-w-md',
   md: 'max-w-2xl',
   lg: 'max-w-4xl',
+  full: 'max-w-full h-full sm:max-w-4xl sm:h-auto',
 } as const;
 
 /* Componente Dialog accesible con soporte para diferentes tamaos y cierre mediante fondo o tecla Escape */
@@ -36,6 +37,7 @@ export const Dialog = ({
   footer,
   size = 'md',
 }: DialogProps) => {
+  const isFullScreen = size === 'full';
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const descId = useId();
@@ -71,7 +73,10 @@ export const Dialog = ({
   return createPortal(
     <div
     /* Contenedor del dialogo centrado con fondo difuminado */
-      className="bg-overlay-blur fixed inset-0 z-[var(--z-modal)] flex items-center justify-center px-4 py-10"
+      className={cn(
+        'bg-overlay-blur fixed inset-0 z-[var(--z-modal)] flex items-center justify-center px-4 py-10',
+        isFullScreen && 'items-end px-0 py-0 sm:items-center',
+      )}
       /* Fondo del dilogo con cierre al hacer clic fuera del contenido */
       role="presentation"
       onMouseDown={(event) => {
@@ -87,11 +92,17 @@ export const Dialog = ({
         tabIndex={-1}
         className={cn(
           /* Contenido del dialogo con soporte para superficies traslucidas */
-          'w-full rounded-lg border border-border bg-surface-translucent shadow-card-strong outline-none transition',
+          'w-full border border-border bg-surface-translucent shadow-card-strong outline-none transition',
+          isFullScreen ? 'h-full rounded-none sm:h-auto sm:rounded-lg' : 'rounded-lg',
           sizeClasses[size],
         )}
       >
-        <header className="bg-surface-header flex items-start justify-between border-b border-border-subtle px-6 py-4">
+        <header
+          className={cn(
+            'bg-surface-header flex items-start justify-between border-b border-border-subtle px-6 py-4',
+            isFullScreen && 'rounded-none sm:rounded-t-lg',
+          )}
+        >
           <div>
             {title && (
               <h2 id={titleId} className="text-lg font-semibold text-content">
@@ -108,8 +119,14 @@ export const Dialog = ({
             X
           </Button>
         </header>
-        <div className="max-h-[70vh] overflow-y-auto px-6 py-4">{children}</div>
-        {footer && <footer className="border-t border-border-subtle px-6 py-4">{footer}</footer>}
+        <div className={cn('max-h-[70vh] overflow-y-auto px-6 py-4', isFullScreen && 'h-full max-h-none')}>
+          {children}
+        </div>
+        {footer && (
+          <footer className={cn('border-t border-border-subtle px-6 py-4', isFullScreen && 'bg-surface')}>
+            {footer}
+          </footer>
+        )}
       </div>
     </div>,
     portalTarget,

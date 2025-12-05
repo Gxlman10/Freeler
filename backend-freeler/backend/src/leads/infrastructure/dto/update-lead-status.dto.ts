@@ -11,7 +11,7 @@ export class UpdateLeadStatusDto {
 
   @ApiProperty({
     example: 2,
-    description: 'Nuevo estado: 1 En Gestión, 2 Ganado, 3 Perdido',
+    description: 'Nuevo estado (consulta el catálogo /leads/catalogos/estado-lead)',
   })
   @Type(() => Number)
   @IsInt()

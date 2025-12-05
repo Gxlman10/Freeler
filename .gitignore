@@ -7,6 +7,12 @@ frontend-freeler/frontend/dist
 backend-freeler/backend/dist
 coverage
 
+Freeler Project Overview
+
+#Permisos futuros
+shared/permissions.json
+
+
 # Environment files
 *.env
 *.env.*

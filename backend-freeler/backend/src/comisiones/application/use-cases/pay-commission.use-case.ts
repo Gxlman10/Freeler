@@ -5,7 +5,7 @@ import {
   COMISION_REPOSITORY,
   IComisionRepository,
 } from '../interfaces/comision.repository.interface';
-import { ComisionRetiroEntity } from '../../infrastructure/entities/comision-retiro.entity';
+import { ComisionSolicitudEntity } from '../../infrastructure/entities/comision-solicitud.entity';
 import CommissionAccountingService, {
   COMISION_ESTADO_PAGADA,
   COMISION_ESTADO_SOLICITADA,
@@ -16,8 +16,8 @@ export class PayCommissionUseCase {
   constructor(
     @Inject(COMISION_REPOSITORY)
     private readonly repo: IComisionRepository,
-    @InjectRepository(ComisionRetiroEntity)
-    private readonly retiroRepo: Repository<ComisionRetiroEntity>,
+    @InjectRepository(ComisionSolicitudEntity)
+    private readonly solicitudRepo: Repository<ComisionSolicitudEntity>,
     private readonly accounting: CommissionAccountingService,
   ) {}
 
@@ -44,13 +44,13 @@ export class PayCommissionUseCase {
       }
     }
 
-    const latestRequest = await this.retiroRepo.findOne({
+    const latestRequest = await this.solicitudRepo.findOne({
       where: { id_comision: id },
-      order: { id_retiro: 'DESC' },
+      order: { id_solicitud: 'DESC' },
     });
     if (latestRequest) {
-      await this.retiroRepo.update(latestRequest.id_retiro, {
-        estado: isPagado ? 'pagado' : 'pendiente',
+      await this.solicitudRepo.update(latestRequest.id_solicitud, {
+        estado: isPagado ? 'pagada' : 'pendiente',
         fecha_resolucion: isPagado ? new Date() : null,
       });
     }

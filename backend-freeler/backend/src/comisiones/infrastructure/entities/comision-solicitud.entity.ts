@@ -8,11 +8,12 @@ import {
 } from 'typeorm';
 import { ComisionEntity } from './comision.entity';
 import { UsuarioFreelerEntity } from '../../../usuarios-freeler/infrastructure/entities/usuario-freeler.entity';
+import { UsuarioEmpresaEntity } from '../../../usuarios-empresa/infrastructure/entities/usuario-empresa.entity';
 
-@Entity({ schema: 'freeler', name: 'comision_retiros' })
-export class ComisionRetiroEntity {
-  @PrimaryGeneratedColumn({ type: 'int', name: 'id_retiro' })
-  id_retiro!: number;
+@Entity({ schema: 'freeler', name: 'comision_solicitudes' })
+export class ComisionSolicitudEntity {
+  @PrimaryGeneratedColumn({ type: 'int', name: 'id_solicitud' })
+  id_solicitud!: number;
 
   @Column({ type: 'int', name: 'id_comision' })
   id_comision!: number;
@@ -20,17 +21,14 @@ export class ComisionRetiroEntity {
   @Column({ type: 'int', name: 'id_usuario_freeler' })
   id_usuario_freeler!: number;
 
-  @Column({ type: 'numeric', precision: 10, scale: 2, name: 'monto' })
-  monto!: string;
-
   @Column({ type: 'varchar', length: 20, name: 'metodo_pago' })
-  metodo_pago!: 'yape' | 'transferencia';
+  metodo_pago!: 'yape' | 'transferencia' | 'plin';
 
-  @Column({ type: 'jsonb', name: 'detalles', nullable: true })
-  detalles?: Record<string, string> | null;
+  @Column({ type: 'jsonb', name: 'datos_pago', nullable: true })
+  datos_pago?: Record<string, unknown> | null;
 
   @Column({ type: 'varchar', length: 20, name: 'estado', default: 'pendiente' })
-  estado!: 'pendiente' | 'pagado' | 'cancelado';
+  estado!: 'pendiente' | 'pagada' | 'rechazada';
 
   @CreateDateColumn({
     type: 'timestamp',
@@ -42,7 +40,13 @@ export class ComisionRetiroEntity {
   @Column({ type: 'timestamp', name: 'fecha_resolucion', nullable: true })
   fecha_resolucion?: Date | null;
 
-  @ManyToOne(() => ComisionEntity, { nullable: false })
+  @Column({ type: 'int', name: 'aprobado_por', nullable: true })
+  aprobado_por?: number | null;
+
+  @Column({ type: 'text', name: 'notas_admin', nullable: true })
+  notas_admin?: string | null;
+
+  @ManyToOne(() => ComisionEntity, (comision) => comision.solicitudes, { nullable: false })
   @JoinColumn({ name: 'id_comision', referencedColumnName: 'id_comision' })
   comision?: ComisionEntity;
 
@@ -52,6 +56,13 @@ export class ComisionRetiroEntity {
     referencedColumnName: 'id_usuario_freeler',
   })
   freeler?: UsuarioFreelerEntity;
+
+  @ManyToOne(() => UsuarioEmpresaEntity, { nullable: true })
+  @JoinColumn({
+    name: 'aprobado_por',
+    referencedColumnName: 'id_usuario_empresa',
+  })
+  aprobadoPorUsuario?: UsuarioEmpresaEntity | null;
 }
 
-export default ComisionRetiroEntity;
+export default ComisionSolicitudEntity;

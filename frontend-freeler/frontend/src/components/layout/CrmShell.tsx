@@ -31,6 +31,7 @@ import { storage } from '@/utils/helpers';
 import { ThemeSwitch } from '@/components/common/ThemeSwitch';
 import freelerLogo from '/freeler_logo.svg';
 import { t } from '@/i18n';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 type NavItem = {
   to: string;
   label: string;
@@ -176,18 +177,59 @@ export const CrmShell = () => {
   const [isProfileDialogOpen, setProfileDialogOpen] = useState(false);
   const [isCompanyDialogOpen, setCompanyDialogOpen] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
+  const navToggleRef = useRef<HTMLButtonElement | null>(null);
   const [isHeaderMenuOpen, setHeaderMenuOpen] = useState(false);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isMobileNavVisible, setMobileNavVisible] = useState(true);
+  const [isMobileOverflowOpen, setMobileOverflowOpen] = useState(false);
+  const [mobileOverflowAnchor, setMobileOverflowAnchor] = useState<{ top: number; left: number } | null>(null);
   const [isDesktopLayout, setDesktopLayout] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     return window.matchMedia('(min-width: 768px)').matches;
   });
+  const [mobileNavCount, setMobileNavCount] = useState(6);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(emptyProfileForm);
   const [companyForm, setCompanyForm] = useState<CompanyFormState>(emptyCompanyForm);
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const navItems = useMemo(() => buildNavItems(user?.role ?? null), [user?.role]);
+  const isMobileScreen = useIsMobile();
+  const effectiveMobileNavCount = useMemo(
+    () => Math.min(navItems.length, Math.max(4, mobileNavCount)),
+    [navItems.length, mobileNavCount],
+  );
+  const visibleMobileNavItems = useMemo(
+    () => navItems.slice(0, effectiveMobileNavCount),
+    [navItems, effectiveMobileNavCount],
+  );
+  const overflowNavItems = useMemo(
+    () => navItems.slice(effectiveMobileNavCount),
+    [navItems, effectiveMobileNavCount],
+  );
+  useEffect(() => {
+    if (!overflowNavItems.length) {
+      setMobileOverflowOpen(false);
+    }
+  }, [overflowNavItems.length]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const computeCount = () => {
+      const width = window.innerWidth;
+      let count = 6;
+      if (width < 360) {
+        count = 4;
+      } else if (width < 460) {
+        count = 5;
+      } else if (width < 540) {
+        count = 5;
+      } else {
+        count = 6;
+      }
+      setMobileNavCount((prev) => (prev === count ? prev : count));
+    };
+    computeCount();
+    window.addEventListener('resize', computeCount);
+    return () => window.removeEventListener('resize', computeCount);
+  }, []);
 
   useEffect(() => {
     if (isLoading) return;
@@ -287,7 +329,7 @@ export const CrmShell = () => {
 
   useEffect(() => {
     if (isDesktopLayout) {
-      setMobileNavVisible(true);
+      setMobileOverflowOpen(false);
     }
   }, [isDesktopLayout]);
   const handleAvatarFile = useCallback(
@@ -387,45 +429,93 @@ export const CrmShell = () => {
       ? `${profile.nombres ?? ''} ${profile.apellidos ?? ''}`.trim() || profile.email
       : user?.email ?? t('crmShell.profileEmailFallback');
   const companyName = company?.razon_social ?? t('crmShell.noAssignedCompany');
-  const companySecondary = company?.email ?? t('crmShell.companyPlaceholder');
   const activeCampaignLabel = t('common.allCampaigns');
   const handleNavigationToggle = () => {
     if (isDesktopLayout) {
       setSidebarCollapsed((prev) => !prev);
       return;
     }
-    setMobileNavVisible((prev) => !prev);
+    if (!overflowNavItems.length) {
+      setMobileOverflowOpen(false);
+      setMobileOverflowAnchor(null);
+      return;
+    }
+    if (!isMobileOverflowOpen) {
+      const rect = navToggleRef.current?.getBoundingClientRect();
+      if (rect) {
+        setMobileOverflowAnchor({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX,
+        });
+      } else {
+        setMobileOverflowAnchor(null);
+      }
+      setMobileOverflowOpen(true);
+    } else {
+      setMobileOverflowOpen(false);
+      setMobileOverflowAnchor(null);
+    }
   };
   const navigationToggleLabel = isDesktopLayout
     ? isSidebarCollapsed
       ? t('crmShell.expandNav')
       : t('crmShell.collapseNav')
-    : isMobileNavVisible
-    ? t('crmShell.hideBottomNav')
-    : t('crmShell.showBottomNav');
-  const isHamburgerActive = isDesktopLayout ? isSidebarCollapsed : !isMobileNavVisible;
+    : overflowNavItems.length
+    ? isMobileOverflowOpen
+      ? t('crmShell.hideOverflowNav')
+      : t('crmShell.showOverflowNav')
+    : t('crmShell.showOverflowNav');
+  const isHamburgerActive = isDesktopLayout ? isSidebarCollapsed : isMobileOverflowOpen && overflowNavItems.length > 0;
   const closeHeaderMenu = () => setHeaderMenuOpen(false);
+  const overflowMenuPosition = useMemo(() => {
+    if (isDesktopLayout || !mobileOverflowAnchor) return null;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const computedLeft = Math.min(
+      Math.max(16, mobileOverflowAnchor.left - 20),
+      Math.max(16, viewportWidth ? viewportWidth - 260 : 0),
+    );
+    return {
+      top: mobileOverflowAnchor.top + 8,
+      left: computedLeft,
+    };
+  }, [isDesktopLayout, mobileOverflowAnchor]);
   const headerMenuContent = (
     <>
-      <div className="space-y-3 border-b border-border-subtle px-4 py-3">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-content-muted">{t('common.profile')}</p>
-          <p className="text-sm font-semibold text-content">{profileName}</p>
-          <p className="text-xs text-content-subtle">{safeUserEmail}</p>
+      <div className="space-y-4 border-b border-border-subtle px-4 py-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white">
+            {getInitials(profileName || user?.email)}
+          </span>
+          <div className="text-sm">
+            <p className="font-semibold text-content">{profileName}</p>
+            <p className="text-xs text-content-muted">{safeUserEmail}</p>
+          </div>
         </div>
-        <div className="grid gap-2 text-xs text-content-subtle">
-          <div>
-            <p className="uppercase tracking-wide">{t('crmShell.roleLabel')}</p>
-            <p className="text-content">{roleLabel}</p>
+        <div className="space-y-3 rounded-2xl bg-surface-muted/70 p-3 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 uppercase tracking-wide text-content-muted">
+              <UserIcon className="h-3.5 w-3.5" />
+              {t('crmShell.roleLabel')}
+            </span>
+            <Badge variant={roleBadgeVariant}>{roleLabel}</Badge>
           </div>
-          <div>
-            <p className="uppercase tracking-wide">{t('common.company')}</p>
-            <p className="text-content">{companyName}</p>
-            <p className="text-content-subtle">{companySecondary}</p>
+          <div className="flex items-center gap-2 text-content">
+            <Building2 className="h-3.5 w-3.5 text-primary-500" />
+            <div className="flex flex-col">
+              <span className="text-[0.7rem] uppercase tracking-wide text-content-muted">
+                {t('common.company')}
+              </span>
+              <span className="text-sm font-medium text-content">{companyName}</span>
+            </div>
           </div>
-          <div>
-            <p className="uppercase tracking-wide">{t('common.campaign')}</p>
-            <p className="text-content">{activeCampaignLabel}</p>
+          <div className="flex items-center gap-2 text-content">
+            <Waypoints className="h-3.5 w-3.5 text-primary-500" />
+            <div className="flex flex-col">
+              <span className="text-[0.7rem] uppercase tracking-wide text-content-muted">
+                {t('common.campaign')}
+              </span>
+              <span className="text-sm font-medium">{activeCampaignLabel}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -433,17 +523,32 @@ export const CrmShell = () => {
         <Button
           variant="ghost"
           className="justify-start"
-        onClick={() => {
-          closeHeaderMenu();
-          setProfileDialogOpen(true);
-        }}
-      >
+          leftIcon={<UserIcon className="h-4 w-4" />}
+          onClick={() => {
+            closeHeaderMenu();
+            setProfileDialogOpen(true);
+          }}
+        >
           {t('common.editProfile')}
         </Button>
+        {user?.role === Role.ADMIN && (
+          <Button
+            variant="ghost"
+            className="justify-start"
+            leftIcon={<Building2 className="h-4 w-4" />}
+            onClick={() => {
+              closeHeaderMenu();
+              setCompanyDialogOpen(true);
+            }}
+          >
+            {t('crmShell.editCompany', 'Editar empresa')}
+          </Button>
+        )}
         {canManageUsers && (
           <Button
             variant="ghost"
             className="justify-start"
+            leftIcon={<Users2 className="h-4 w-4" />}
             onClick={() => {
               closeHeaderMenu();
               navigate(APP_ROUTES.crm.usuarios);
@@ -516,12 +621,14 @@ export const CrmShell = () => {
                 aria-label={navigationToggleLabel}
                 title={navigationToggleLabel}
                 onClick={handleNavigationToggle}
+                ref={navToggleRef}
                 className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle bg-surface text-content transition hover:border-primary-400 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                  'flex items-center justify-center rounded-full border border-border-subtle bg-surface text-content transition hover:border-primary-400 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                  isMobileScreen ? 'h-12 w-12' : 'h-10 w-10',
                   isHamburgerActive && 'border-primary-500 text-primary-600',
                 )}
               >
-                <Menu className="h-5 w-5" />
+                <Menu className={cn(isMobileScreen ? 'h-7 w-7' : 'h-5 w-5')} />
               </button>
               <div className="hidden items-center gap-3 sm:flex">
                 <img src={freelerLogo} alt="Freeler CRM" className="h-8 w-auto" />
@@ -564,97 +671,102 @@ export const CrmShell = () => {
         <div className="flex flex-1 bg-background-subtle">
           <aside
             className={cn(
-              'relative hidden flex-shrink-0 border-r border-border bg-surface-elevated shadow-card transition-all duration-200 md:flex md:flex-col md:overflow-hidden md:sticky md:top-14 md:h-[calc(100vh-3.5rem)]',
-              isSidebarCollapsed ? 'w-20 px-3 py-6' : 'w-72 px-5 py-6 lg:w-80',
+              'relative hidden flex-shrink-0 overflow-hidden border-r border-border/40 bg-white/95 text-slate-700 shadow-xl transition-all duration-300 dark:border-transparent dark:bg-gradient-to-b dark:from-slate-950/95 dark:via-slate-900/95 dark:to-slate-950/90 dark:text-white md:flex md:flex-col md:sticky md:top-[64px] md:h-[calc(100vh-64px)]',
+              isSidebarCollapsed ? 'w-20 px-3 py-4' : 'w-72 px-5 py-6 lg:w-80',
             )}
           >
             <div className="flex flex-1 flex-col gap-6">
-              {isSidebarCollapsed ? (
-                <div className="flex justify-center">
-                  <div className="relative inline-flex">
-                    <AvatarCircle name={companyName} imageUrl={companyLogo} size="md" />
-                    <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-surface text-primary-600 shadow-card">
-                      <Building2 className="h-3 w-3" />
-                    </span>
-                  </div>
+              <div
+                className={cn(
+                  'flex gap-3 px-1 text-left',
+                  isSidebarCollapsed ? 'flex-col items-center gap-2 px-0' : 'items-center',
+                )}
+              >
+                <div className="relative inline-flex">
+                  <AvatarCircle name={companyName} imageUrl={companyLogo} size="md" />
+                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-primary-700 shadow-card dark:bg-white/90">
+                    <Building2 className="h-3 w-3" />
+                  </span>
                 </div>
-              ) : (
-                <div className="rounded-xl border border-border-subtle bg-surface px-4 py-4 shadow-card">
-                  <div className="flex items-start gap-3">
-                    <div className="relative inline-flex">
-                      <AvatarCircle name={companyName} imageUrl={companyLogo} size="md" />
-                      <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-surface text-primary-600 shadow-card">
-                        <Building2 className="h-3 w-3" />
-                      </span>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-content">{companyName}</p>
-                      <p className="text-xs text-content-muted">{companySecondary}</p>
-                    </div>
+                {!isSidebarCollapsed && (
+                  <div className="flex flex-col leading-tight">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">{companyName}</p>
                   </div>
-                </div>
-              )}
-              <nav className="flex flex-1 flex-col gap-1 text-sm font-medium text-content-muted">
+                )}
+              </div>
+              <nav
+                className={cn(
+                  'flex flex-1 flex-col gap-1.5 text-sm font-semibold text-slate-600 dark:text-white/70',
+                  isSidebarCollapsed && 'gap-2 p-0 py-1',
+                )}
+              >
                 {navItems.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
                     className={({ isActive }) =>
                       cn(
-                        'group relative flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 transition-all',
+                        'group relative flex items-center gap-3 rounded-xl border px-3 py-2 transition-all',
                         isActive
-                          ? 'border-primary-500/50 bg-primary-500/10 text-primary-900 shadow-card dark:border-primary-400/50 dark:bg-primary-400/20 dark:text-white'
-                          : 'text-content-muted hover:bg-surface-muted hover:text-content',
-                        isSidebarCollapsed && 'justify-center px-2',
+                          ? 'border-primary-300/70 bg-primary-50/60 text-primary-900 shadow-sm dark:border-primary-500 dark:bg-white/10 dark:text-white'
+                          : 'border-transparent text-slate-500 hover:border-primary-100 hover:bg-primary-50/60 hover:text-slate-900 dark:text-white/60 dark:hover:border-white/10 dark:hover:bg-white/5 dark:hover:text-white',
+                        isSidebarCollapsed && 'justify-center px-0 py-2',
                       )
                     }
                   >
                     {({ isActive }) => (
-                      <>
-                        <span
-                          className={cn(
-                            'text-lg transition-colors',
-                            isActive
-                              ? 'text-primary-600 dark:text-primary-100'
-                              : 'text-primary-500 dark:text-primary-300 group-hover:text-primary-600',
-                          )}
-                        >
-                          {item.icon}
-                        </span>
+                      <div className="flex flex-1 items-center gap-3">
+                        {isSidebarCollapsed ? (
+                          <span
+                            className={cn(
+                              'text-lg transition-colors',
+                              isActive
+                                ? 'text-primary-600 dark:text-primary-200'
+                                : 'text-slate-500 dark:text-white/70 group-hover:text-primary-400',
+                            )}
+                          >
+                            {item.icon}
+                          </span>
+                        ) : (
+                          <span
+                            className={cn(
+                              'flex h-9 w-9 items-center justify-center rounded-2xl border border-transparent bg-white text-lg text-primary-600 shadow-sm transition-all dark:bg-white/10 dark:text-white',
+                              isActive && 'border-primary-300 bg-white text-primary-800 dark:border-primary-500',
+                            )}
+                          >
+                            {item.icon}
+                          </span>
+                        )}
                         {!isSidebarCollapsed && (
                           <div className="flex flex-1 items-center justify-between gap-2">
                             <span
                               className={cn(
-                                'font-semibold transition-colors',
-                                isActive ? 'text-content dark:text-white' : 'text-content',
+                                'font-semibold tracking-wide',
+                                isActive ? 'text-primary-900 dark:text-white' : 'text-slate-700 dark:text-white/80',
                               )}
                             >
                               {item.label}
                             </span>
                             {isActive && (
-                              <span className="h-1.5 w-10 rounded-full bg-primary-500 shadow-[0_0_10px_rgba(34,197,94,0.5)] dark:bg-primary-300" />
+                              <span className="h-1 w-10 rounded-full bg-primary-400 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-primary-200" />
                             )}
                           </div>
                         )}
-                      </>
+                      </div>
                     )}
                   </NavLink>
                 ))}
               </nav>
-              <div className="mt-auto flex w-full items-center gap-3 rounded-xl border border-border-subtle bg-surface px-3 py-3 text-left shadow-card transition">
+              <div className="mt-auto flex items-center justify-start gap-3 px-1">
                 <div className="relative inline-flex">
-                  <AvatarCircle name={profileName} imageUrl={profileAvatar} size="sm" />
-                  <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-surface text-primary-600 shadow-card">
+                  <AvatarCircle name={profileName} imageUrl={profileAvatar} size="md" />
+                  <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary-100 text-primary-700 shadow-card dark:bg-white/80">
                     <UserIcon className="h-3 w-3" />
                   </span>
                 </div>
                 {!isSidebarCollapsed && (
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-content">{profileName}</p>
-                    <p className="text-xs text-content-subtle">{safeUserEmail}</p>
-                    <Badge variant={roleBadgeVariant} className="mt-2">
-                      {roleLabel}
-                    </Badge>
+                  <div className="flex flex-col text-left leading-tight">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">{profileName}</p>
                   </div>
                 )}
               </div>
@@ -671,21 +783,16 @@ export const CrmShell = () => {
               </div>
             </main>
             {/* Barra inferior para navegacin en dispositivos mviles */}
-            <nav
-              className={cn(
-                'fixed inset-x-0 bottom-0 z-[var(--z-drawer)] border-t border-border bg-surface-elevated shadow-card md:hidden',
-                !isMobileNavVisible && 'hidden',
-              )}
-            >
-              <div className="mx-auto flex max-w-4xl items-center justify-around px-4 py-2">
-                {navItems.map((item) => (
+            <nav className="crm-mobile-footer fixed inset-x-0 bottom-0 z-[var(--z-drawer)] border-t border-transparent bg-gradient-to-r from-primary-700 via-primary-600 to-primary-700 text-white shadow-[0_-10px_30px_rgba(15,23,42,0.45)] dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 md:hidden">
+              <div className="mx-auto flex max-w-4xl items-center justify-around gap-1 px-3 py-2">
+                {visibleMobileNavItems.map((item) => (
                   <NavLink
                     key={`mobile-${item.to}`}
                     to={item.to}
                     className={({ isActive }) =>
                       cn(
-                        'flex flex-col items-center gap-1 text-xs font-medium transition-colors',
-                        isActive ? 'text-primary-600' : 'text-content-muted hover:text-content',
+                        'flex flex-1 flex-col items-center gap-1 text-[0.8em] font-semibold uppercase tracking-wide transition',
+                        isActive ? 'text-white' : 'text-white/70 hover:text-white',
                       )
                     }
                   >
@@ -693,13 +800,15 @@ export const CrmShell = () => {
                       <>
                         <span
                           className={cn(
-                            'text-lg transition-colors',
-                            isActive ? 'text-primary-600 dark:text-primary-200' : 'text-content-muted',
+                            'flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-lg shadow-inner transition',
+                            isActive ? 'bg-white text-primary-700 dark:bg-white/90' : 'text-white/80',
                           )}
                         >
                           {item.icon}
                         </span>
-                        <span className="max-w-[5rem] truncate">{item.label}</span>
+                        <span className="max-w-[5rem] truncate text-[0.7em] font-semibold">
+                          {item.label}
+                        </span>
                       </>
                     )}
                   </NavLink>
@@ -878,6 +987,38 @@ export const CrmShell = () => {
           </div>
         </form>
       </Dialog>
+      {!isDesktopLayout && isMobileOverflowOpen && (
+        <div className="fixed inset-0 z-[var(--z-drawer)]" onClick={() => setMobileOverflowOpen(false)}>
+          <div
+            className="absolute w-60 rounded-2xl border border-border-subtle bg-surface p-3 shadow-2xl"
+            style={overflowMenuPosition ?? { right: 16, top: 76 }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="px-2 text-xs uppercase tracking-wide text-content-muted">
+              {t('crmShell.moreModules')}
+            </p>
+            <div className="mt-2 flex flex-col gap-2">
+              {overflowNavItems.length ? (
+                overflowNavItems.map((item) => (
+                  <NavLink
+                    key={`overflow-${item.to}`}
+                    to={item.to}
+                    onClick={() => setMobileOverflowOpen(false)}
+                    className="flex items-center gap-3 rounded-xl border border-border-subtle px-3 py-2 text-sm font-semibold text-content transition hover:border-primary-500 hover:text-primary-600"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/70 text-primary-600 shadow-sm dark:bg-white/10 dark:text-white">
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))
+              ) : (
+                <p className="px-2 text-xs text-content-muted">{t('crmShell.moreModulesEmpty')}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Fragment>
   );
 };

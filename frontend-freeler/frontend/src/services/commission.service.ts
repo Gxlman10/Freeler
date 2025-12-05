@@ -1,4 +1,15 @@
 import { api } from './api';
+import type { LeadAssignment } from './lead.service';
+import { buildQueryParams } from '@/utils/http';
+
+export type CommissionRequest = {
+  id_solicitud: number;
+  metodo_pago: 'yape' | 'transferencia' | 'plin';
+  datos_pago?: Record<string, unknown> | null;
+  estado: 'pendiente' | 'pagada' | 'rechazada';
+  fecha_solicitud: string;
+  fecha_resolucion?: string | null;
+};
 
 export type Commission = {
   id_comision: number;
@@ -8,6 +19,7 @@ export type Commission = {
   monto: string;
   id_estado_comision?: number | null;
   fecha_pago?: string | null;
+  fecha_generada?: string | null;
   freeler?: {
     id_usuario_freeler: number;
     nombres?: string | null;
@@ -18,6 +30,14 @@ export type Commission = {
     id_campania?: number | null;
     nombre?: string | null;
   } | null;
+  lead?: {
+    id_lead?: number | null;
+    nombres?: string | null;
+    apellidos?: string | null;
+    fecha_creacion?: string | null;
+    asignaciones?: LeadAssignment[];
+  } | null;
+  retiros?: CommissionRequest[];
 };
 
 export type CommissionPaginatedResponse = {
@@ -46,18 +66,6 @@ export type CommissionSummary = {
     }
   >;
 };
-
-const normalizeParams = (params: Record<string, unknown> = {}) =>
-  Object.fromEntries(
-    Object.entries(params)
-      .filter(([, value]) => value !== undefined && value !== null && value !== '')
-      .map(([key, value]) => {
-        if (typeof value === 'boolean') {
-          return [key, value ? 'true' : 'false'];
-        }
-        return [key, value];
-      }),
-  );
 
 const coerceNumber = (value?: unknown) => {
   const parsed = Number(value ?? 0);
@@ -108,7 +116,7 @@ const buildFallbackSummary = (commissions: Commission[]): CommissionSummary => {
 export const CommissionService = {
   async list(params: Record<string, unknown> = {}) {
     const { data } = await api.get('/comisiones', {
-      params: normalizeParams(params),
+      params: buildQueryParams(params),
     });
     return data as CommissionPaginatedResponse | Commission[];
   },
